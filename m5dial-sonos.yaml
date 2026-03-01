@@ -423,6 +423,7 @@ display:
     dc_pin:    GPIO4
     reset_pin: GPIO8
     color_palette: 8BIT        # 8-bit (RGB332) buffer = 57 KB; 16-bit = 113 KB → OOM without PSRAM
+    show_test_card: true       # DIAGNOSTIC — shows color bars, bypasses LVGL. Remove after testing.
     invert_colors: true
     update_interval: never
     auto_clear_enabled: false   # Required for LVGL — prevents ESPHome clearing the buffer
