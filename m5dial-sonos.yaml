@@ -61,6 +61,7 @@ esphome:
   # Must be in the same folder as this YAML file.
   includes:
     - m5dial_security.h
+    - dsps_fft2r_platform.h   # stub: disables JPEGDEC S3 SIMD (esp-dsp not on path with Arduino framework)
 
   on_boot:
     # ── Priority 400 — BEFORE the API server starts ─────────────────────────
@@ -167,7 +168,7 @@ http_request:
 # ─────────────────────────────────────────────────────────────────────────────
 online_image:
   - id: album_art_img
-    url: ""              # Initial URL — replaced on first entity_picture update
+    url: "http://localhost/placeholder.jpg"   # Placeholder — replaced on first entity_picture update; on_error handles the initial 404
     format: JPEG
     type: RGB565         # 16-bit colour — matches display color_depth: 16
     resize: 240x240      # Scale to fill the round display
@@ -421,7 +422,8 @@ display:
 # orange (#FF9500) accent colour.
 # ─────────────────────────────────────────────────────────────────────────────
 lvgl:
-  display_id: round_display
+  displays:
+    - round_display
   color_depth: 16
   bg_color:    0x1A1A1A
 
@@ -573,7 +575,7 @@ lvgl:
             width: 240
             height: 80
             bg_color: 0x000000
-            bg_opa: 180
+            bg_opa: 71%
             border_width: 0
             pad_all: 0
             radius: 0
@@ -609,7 +611,7 @@ lvgl:
             text_font: font_20
             text_color: 0xFF9500
             bg_color: 0x000000
-            bg_opa: 160
+            bg_opa: 63%
 
         # ── Mode indicator dots (dot 1 = orange = active) ─────────────────
         - label:
@@ -662,10 +664,11 @@ lvgl:
             max_value: 100
             value: 0
             adjustable: false
-            arc_color:    0xFF9500
-            bg_arc_color: 0x333333
+            arc_color: 0x333333   # background track (main part)
             arc_width: 8
-            bg_arc_width: 8
+            indicator:
+              arc_color: 0xFF9500 # foreground value arc
+              arc_width: 8
             start_angle: 135
             end_angle: 45
 
@@ -740,7 +743,7 @@ sensor:
                 break;
             }
 
-    on_counter_clockwise:
+    on_anticlockwise:
       then:
         - script.execute: wake_screen
         - lambda: |-
@@ -789,7 +792,7 @@ binary_sensor:
     on_multi_click:
       # Short press — released before long_press_duration elapses
       - timing:
-          - ON  for at most  ${long_press_duration}
+          - ON for at most ${long_press_duration}
           - OFF for at least 50ms
         then:
           - script.execute: wake_screen
