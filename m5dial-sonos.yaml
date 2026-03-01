@@ -992,12 +992,9 @@ text_sensor:
                   text: "▶"
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# SETUP KEY — Exposes the per-device API key to Home Assistant and the web UI.
-# Copy this value from the HA entity (or from http://<device-ip>/) and paste
-# it into the ESPHome device entry in HA when prompted for the encryption key.
-# ─────────────────────────────────────────────────────────────────────────────
-text_sensor:
+  # ── Setup Key — Exposes the per-device API key to Home Assistant and the web UI.
+  # Copy this value from the HA entity (or from http://<device-ip>/) and paste
+  # it into the ESPHome device entry in HA when prompted for the encryption key.
   - platform: template
     id: ts_setup_key
     name: "${friendly_name} Setup Key"
