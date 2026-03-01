@@ -109,15 +109,17 @@ esphome:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLATFORM — ESP32-S3FN8, 8 MB flash, IDF framework
+# PLATFORM — ESP32-S3FN8, 8 MB flash, Arduino framework
 # The M5StampS3 uses ESP32-S3FN8: 8 MB flash, NO PSRAM.
-# All buffers must fit in the 512 KB internal SRAM alongside WiFi + IDF.
+# psram: component is intentionally absent — enabling it causes the IDF boot
+# loader to probe for PSRAM that does not exist and fail.
+# All buffers must fit in the 512 KB internal SRAM alongside WiFi + Arduino.
 # ─────────────────────────────────────────────────────────────────────────────
 esp32:
   board: esp32-s3-devkitc-1
   variant: esp32s3
   framework:
-    type: esp-idf
+    type: arduino
   flash_size: 8MB
 
 
