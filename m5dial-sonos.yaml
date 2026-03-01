@@ -424,6 +424,7 @@ display:
     color_order: bgr
     invert_colors: true
     update_interval: never
+    auto_clear_enabled: false   # Required for LVGL — prevents ESPHome clearing the buffer
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -437,9 +438,9 @@ lvgl:
     - round_display
   color_depth: 16
   bg_color:    0x1A1A1A
-  # Partial render buffer: 25% of screen = 60 rows × 240 × 2 B = 28 KB.
-  # Avoids the full 115 KB framebuffer that requires PSRAM.
-  buffer_size: 25%
+  # Partial render buffer: 12% of screen = ~14 KB.
+  # 25% causes a bootloop regression in some ESPHome 2025.x builds.
+  buffer_size: 12%
 
   pages:
 
