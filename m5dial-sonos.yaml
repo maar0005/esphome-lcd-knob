@@ -663,10 +663,11 @@ lvgl:
             max_value: 100
             value: 0
             adjustable: false
-            arc_color:    0xFF9500
-            bg_arc_color: 0x333333
+            arc_color: 0x333333   # background track (main part)
             arc_width: 8
-            bg_arc_width: 8
+            indicator:
+              arc_color: 0xFF9500 # foreground value arc
+              arc_width: 8
             start_angle: 135
             end_angle: 45
 
