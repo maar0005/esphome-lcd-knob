@@ -406,7 +406,7 @@ globals:
 # update_interval: never → LVGL drives all redraws; no draw lambda needed.
 # ─────────────────────────────────────────────────────────────────────────────
 display:
-  - platform: gc9a01a
+  - platform: gc9a01
     id: round_display
     cs_pin:    GPIO7
     dc_pin:    GPIO4
