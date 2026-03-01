@@ -38,7 +38,13 @@ substitutions:
   long_press_duration: "800ms"
 
   # Inactivity timeout in milliseconds before the screen dims to 10 %
+  # Dimming is suppressed while music is playing — see dim_screen_timer.
   screen_off_time: "30000"
+
+  # Base URL of your Home Assistant instance.
+  # Album art is fetched by prepending this to the entity_picture attribute path.
+  # Examples: "http://homeassistant.local:8123"  or  "http://192.168.1.100:8123"
+  ha_url: "http://homeassistant.local:8123"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -141,6 +147,36 @@ improv_serial:
 # After provisioning, visit http://<device-ip>/ to copy the Setup Key.
 web_server:
   port: 80
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HTTP CLIENT — required by online_image below.
+# verify_ssl: false avoids issues with HA's self-signed certificate.
+# ─────────────────────────────────────────────────────────────────────────────
+http_request:
+  useragent: ESPHome
+  timeout: 10s
+  verify_ssl: false
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ALBUM ART — Fetched from HA media_player_proxy over HTTP.
+# The entity_picture text_sensor (below) calls set_url() + update() each time
+# the track changes.  A 64 KB buffer covers typical 240×240 JPEG art.
+# ─────────────────────────────────────────────────────────────────────────────
+online_image:
+  - id: album_art_img
+    url: ""              # Initial URL — replaced on first entity_picture update
+    format: JPEG
+    type: RGB565         # 16-bit colour — matches display color_depth: 16
+    resize: 240x240      # Scale to fill the round display
+    buffer_size: 65536   # 64 KB
+    on_error:
+      then:
+        - logger.log:
+            level: WARN
+            tag: sonos
+            format: "Album art fetch failed — keeping previous image"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -516,42 +552,69 @@ lvgl:
             text_font: font_14
             text_color: 0x444444
 
-    # ── PAGE 1: NOW PLAYING ─────────────────────────────────────────────────
+    # ── PAGE 1: NOW PLAYING (album art) ─────────────────────────────────────
+    # Layout (bottom → top in LVGL z-order = declaration order here):
+    #   1. Full-screen album art (240×240 JPEG, fetched from HA)
+    #   2. Dark bottom strip (obj) for text readability over the image
+    #   3. Track title + artist labels
+    #   4. Play/pause icon (top, small dark pill)
+    #   5. Mode dots
     - id: page_now_playing
-      bg_color: 0x1A1A1A
+      bg_color: 0x000000
       widgets:
-        # Play ▶ / Pause ⏸ icon — updated dynamically when state changes
-        - label:
-            id: lbl_play_icon
-            text: "▶"
-            align: TOP_MID
-            y: 18
-            text_font: font_28
-            text_color: 0xFF9500
+        # ── Album art — full-screen background ────────────────────────────
+        # Rendered first so all other widgets draw on top of it.
+        - image:
+            id: lbl_album_art
+            src: album_art_img
+            align: CENTER
 
-        # Track title — SCROLL_CIRCULAR auto-scrolls long titles
+        # ── Dark bottom strip — improves text contrast over busy artwork ──
+        # 80 px tall, fully black, 70 % opacity.
+        - obj:
+            align: BOTTOM_MID
+            width: 240
+            height: 80
+            bg_color: 0x000000
+            bg_opa: 180
+            border_width: 0
+            pad_all: 0
+            radius: 0
+
+        # ── Track title ───────────────────────────────────────────────────
         - label:
             id: lbl_track_title
             text: "—"
-            align: CENTER
-            y: -15
-            text_font: font_20
+            align: BOTTOM_MID
+            y: -48
+            text_font: font_18
             text_color: 0xFFFFFF
             long_mode: SCROLL_CIRCULAR
             width: 200
 
-        # Artist name — smaller, below the track title
+        # ── Artist name ───────────────────────────────────────────────────
         - label:
             id: lbl_artist
             text: ""
-            align: CENTER
-            y: 18
-            text_font: font_16
-            text_color: 0xAAAAAA
+            align: BOTTOM_MID
+            y: -25
+            text_font: font_14
+            text_color: 0xCCCCCC
             long_mode: SCROLL_CIRCULAR
             width: 200
 
-        # Mode indicator dots (dot 1 = orange = active)
+        # ── Play ▶ / Pause ⏸ icon — small pill at the top ────────────────
+        - label:
+            id: lbl_play_icon
+            text: "▶"
+            align: TOP_MID
+            y: 14
+            text_font: font_20
+            text_color: 0xFF9500
+            bg_color: 0x000000
+            bg_opa: 160
+
+        # ── Mode indicator dots (dot 1 = orange = active) ─────────────────
         - label:
             id: dot_p1_0
             text: "●"
@@ -878,6 +941,25 @@ text_sensor:
             id(current_volume) = vol;
             id(update_volume_display).execute();
 
+  # ── entity_picture — album art URL from HA media_player proxy ──────────
+  # HA returns a relative path such as:
+  #   /api/media_player_proxy/media_player.living_room?token=abc&cache=xyz
+  # We prepend ha_url to build the full URL and hand it to online_image.
+  - platform: homeassistant
+    id: ts_entity_picture
+    entity_id: "${sonos_entity}"
+    attribute: entity_picture
+    on_value:
+      then:
+        - lambda: |-
+            if (x.empty()) return;
+            // Accept both absolute URLs and relative HA proxy paths
+            std::string url = (x.rfind("http", 0) == 0) ? x
+                                                         : "${ha_url}" + x;
+            id(album_art_img).set_url(url.c_str());
+            id(album_art_img).update();
+            ESP_LOGI("sonos", "Loading album art: %s", url.c_str());
+
   # ── player state — "playing" | "paused" | "idle" | "off" ───────────────
   # We subscribe to the entity state itself (no attribute: key needed).
   - platform: homeassistant
@@ -886,17 +968,25 @@ text_sensor:
     on_value:
       then:
         - lambda: |-
-            bool playing = (x == "playing");
-            id(is_playing) = playing;
-        # Update the play/pause icon — ESPHome action, safe on LVGL thread
+            id(is_playing) = (x == "playing");
+        # When playback starts: show album art page, wake screen, (re)start
+        # dim timer — the timer will not dim while is_playing is true.
         - if:
             condition:
               lambda: 'return id(is_playing);'
             then:
+              - light.turn_on:
+                  id: backlight
+                  brightness: 100%
+              - script.execute: dim_screen_timer
+              - lambda: 'id(current_mode) = 1;'
+              - lvgl.page.show: page_now_playing
               - lvgl.label.update:
                   id: lbl_play_icon
                   text: "⏸"
             else:
+              # Not playing: restart dim countdown, update icon
+              - script.execute: dim_screen_timer
               - lvgl.label.update:
                   id: lbl_play_icon
                   text: "▶"
@@ -968,16 +1058,21 @@ script:
       - script.execute: dim_screen_timer
 
   # ── dim_screen_timer ──────────────────────────────────────────────────────
-  # Waits screen_off_time ms then dims the backlight to 10 %.
+  # Waits screen_off_time ms then dims the backlight to 10 % — but only when
+  # music is NOT playing.  While Sonos is playing the screen stays bright.
   # mode: restart means each call to script.execute restarts the countdown,
-  # so interactions continuously push the dim event into the future.
+  # so interactions and play/pause state changes reset the timer.
   - id: dim_screen_timer
     mode: restart
     then:
       - delay: !lambda 'return (uint32_t)${screen_off_time};'
-      - light.turn_on:
-          id: backlight
-          brightness: 10%
+      - if:
+          condition:
+            lambda: 'return !id(is_playing);'
+          then:
+            - light.turn_on:
+                id: backlight
+                brightness: 10%
 
   # ── next_mode ─────────────────────────────────────────────────────────────
   # Advances current_mode 0→1→2→0, shows the matching LVGL page, beeps.
