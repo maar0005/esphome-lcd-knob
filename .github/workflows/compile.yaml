@@ -1,0 +1,21 @@
+name: Compile
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  compile:
+    name: ESPHome compile
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # secrets.yaml is git-ignored; provide a stub so ESPHome can parse the config.
+      - name: Create CI secrets
+        run: printf 'ota_password: "ci-placeholder"\n' > secrets.yaml
+
+      - uses: esphome/build-action@v6
+        with:
+          yaml-file: m5dial-sonos.yaml

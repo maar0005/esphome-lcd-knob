@@ -53,6 +53,7 @@ substitutions:
 esphome:
   name: "${device_name}"
   friendly_name: "${friendly_name}"
+  min_version: "2024.2.0"   # LVGL requires 2024.2+; ili9xxx gc9a01a model requires 2025.1+
   # Appends the last 3 bytes of the MAC to the device hostname so multiple
   # dials on the same network get unique names (e.g. sonos-dial-a1b2c3).
   name_add_mac_suffix: true
@@ -276,9 +277,8 @@ rtttl:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # FONTS
-# Built-in LVGL Montserrat fonts — no external files needed.
+# Fetched from Google Fonts via gfonts:// at build time and cached locally.
 # All sizes used in LVGL widgets must be declared here.
-# ESPHome bundles Montserrat at even sizes 8–48.
 # ─────────────────────────────────────────────────────────────────────────────
 font:
   - file: "gfonts://Material+Symbols+Outlined"
@@ -288,34 +288,30 @@ font:
       - "\U0000E050"  # play_arrow
       - "\U0000E034"  # pause
       - "\U0000E89F"  # music_note
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_10
     size: 10
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_14
     size: 14
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_16
     size: 16
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_18
     size: 18
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_20
     size: 20
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_24
     size: 24
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_28
     size: 28
-  - file: "fonts/Montserrat-Regular.ttf"
+  - file: "gfonts://Montserrat"
     id: font_36
     size: 36
-
-# NOTE: ESPHome will auto-download Montserrat from Google Fonts on first build.
-# Alternatively, place Montserrat-Regular.ttf in the same folder as this YAML
-# and it will be picked up from disk instead.
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -406,7 +402,8 @@ globals:
 # update_interval: never → LVGL drives all redraws; no draw lambda needed.
 # ─────────────────────────────────────────────────────────────────────────────
 display:
-  - platform: gc9a01a
+  - platform: ili9xxx
+    model: gc9a01a
     id: round_display
     cs_pin:    GPIO7
     dc_pin:    GPIO4
