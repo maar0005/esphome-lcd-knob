@@ -134,7 +134,7 @@ wifi:
     ssid: "${friendly_name} Setup"
     password: ""
   # Switch to the main UI page once Wi-Fi connects after provisioning/reboot
-  on_connected:
+  on_connect:
     then:
       - lvgl.page.show: page_playlist
 
