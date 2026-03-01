@@ -121,6 +121,13 @@ esp32:
     type: arduino
   flash_size: 8MB
 
+# ESPHome 2025.2+ no longer enables PSRAM automatically.
+# The M5Dial has 8 MB OPI PSRAM — required for LVGL framebuffer (115 KB)
+# and the online_image album-art buffer (also 115 KB).
+psram:
+  mode: octal
+  speed: 80MHz
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WI-FI
@@ -283,11 +290,20 @@ rtttl:
 # ─────────────────────────────────────────────────────────────────────────────
 font:
   - file: "gfonts://Material+Symbols+Outlined"
-    id: icon_font_36
-    size: 36
+    id: icon_font_14
+    size: 14
+    glyphs:
+      - "\U0000E061"  # fiber_manual_record — solid circle for mode-indicator dots
+  - file: "gfonts://Material+Symbols+Outlined"
+    id: icon_font_20
+    size: 20
     glyphs:
       - "\U0000E050"  # play_arrow
       - "\U0000E034"  # pause
+  - file: "gfonts://Material+Symbols+Outlined"
+    id: icon_font_28
+    size: 28
+    glyphs:
       - "\U0000E89F"  # music_note
   - file: "gfonts://Montserrat"
     id: font_10
@@ -498,10 +514,10 @@ lvgl:
         # Music note glyph — decorative header
         - label:
             id: lbl_music_icon
-            text: "♫"
+            text: "\U0000E89F"
             align: TOP_MID
             y: 18
-            text_font: font_28
+            text_font: icon_font_28
             text_color: 0xFF9500
 
         # Currently selected playlist name; scrolls if wider than 200 px
@@ -528,27 +544,27 @@ lvgl:
         # Active dot is orange; inactive dots are dark grey.
         - label:
             id: dot_p0_0
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -14
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0xFF9500   # Active (mode 0)
         - label:
             id: dot_p0_1
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -30
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0x444444
         - label:
             id: dot_p0_2
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -46
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0x444444
 
     # ── PAGE 1: NOW PLAYING (album art) ─────────────────────────────────────
@@ -605,10 +621,10 @@ lvgl:
         # ── Play ▶ / Pause ⏸ icon — small pill at the top ────────────────
         - label:
             id: lbl_play_icon
-            text: "▶"
+            text: "\U0000E050"
             align: TOP_MID
             y: 14
-            text_font: font_20
+            text_font: icon_font_20
             text_color: 0xFF9500
             bg_color: 0x000000
             bg_opa: 63%
@@ -616,27 +632,27 @@ lvgl:
         # ── Mode indicator dots (dot 1 = orange = active) ─────────────────
         - label:
             id: dot_p1_0
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -14
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0x444444
         - label:
             id: dot_p1_1
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -30
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0xFF9500   # Active (mode 1)
         - label:
             id: dot_p1_2
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -46
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0x444444
 
     # ── PAGE 2: VOLUME ──────────────────────────────────────────────────────
@@ -683,27 +699,27 @@ lvgl:
         # Mode indicator dots (dot 2 = orange = active)
         - label:
             id: dot_p2_0
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -14
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0x444444
         - label:
             id: dot_p2_1
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -30
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0x444444
         - label:
             id: dot_p2_2
-            text: "●"
+            text: "\U0000E061"
             align: BOTTOM_RIGHT
             x: -46
             y: -12
-            text_font: font_14
+            text_font: icon_font_14
             text_color: 0xFF9500   # Active (mode 2)
 
 
@@ -983,13 +999,13 @@ text_sensor:
               - lvgl.page.show: page_now_playing
               - lvgl.label.update:
                   id: lbl_play_icon
-                  text: "⏸"
+                  text: "\U0000E034"   # pause (Material Symbols)
             else:
               # Not playing: restart dim countdown, update icon
               - script.execute: dim_screen_timer
               - lvgl.label.update:
                   id: lbl_play_icon
-                  text: "▶"
+                  text: "\U0000E050"   # play_arrow (Material Symbols)
 
 
   # ── Setup Key — Exposes the per-device API key to Home Assistant and the web UI.
