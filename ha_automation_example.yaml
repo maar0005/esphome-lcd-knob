@@ -1,0 +1,112 @@
+# ha_automation_example.yaml
+#
+# Example Home Assistant automations demonstrating how to react when the
+# Sonos Dial selects a playlist source or changes playback state.
+#
+# These automations are OPTIONAL — the dial works without them.
+# They show how to extend the dial's functionality from the HA side.
+#
+# Import into HA via: Settings → Automations → ⋮ → Import Blueprint / YAML
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXAMPLE 1: Log whenever the dial selects a Sonos source
+# Useful for debugging or building a "recently played" history
+# ─────────────────────────────────────────────────────────────────────────────
+- id: sonos_dial_source_selected_log
+  alias: "Sonos Dial — Log source selection"
+  description: >
+    Fires whenever the media player's source changes. Logs the new source
+    so you can see what the dial is choosing in the HA logbook.
+  trigger:
+    - platform: state
+      entity_id: media_player.living_room   # ← Change to your Sonos entity
+      attribute: source
+  condition:
+    # Only act when the change came from an actual source selection
+    # (i.e. the source attribute is not blank)
+    - condition: template
+      value_template: "{{ trigger.to_state.attributes.source | default('') != '' }}"
+  action:
+    - service: logbook.log
+      data:
+        name: "Sonos Dial"
+        message: >
+          Selected source: {{ trigger.to_state.attributes.source }}
+        entity_id: media_player.living_room   # ← Change to your Sonos entity
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXAMPLE 2: Trigger a scene when "Morning Routine" playlist is selected
+# Demonstrates reacting to a specific playlist choice
+# ─────────────────────────────────────────────────────────────────────────────
+- id: sonos_dial_morning_scene
+  alias: "Sonos Dial — Morning Routine scene"
+  description: >
+    When the dial selects the "Morning Routine" Sonos favourite, also
+    activate a morning scene (e.g. raise blinds, set warm lights).
+    Adapt the source name and scene to match your setup.
+  trigger:
+    - platform: state
+      entity_id: media_player.living_room   # ← Change to your Sonos entity
+      attribute: source
+  condition:
+    - condition: template
+      value_template: >
+        {{ trigger.to_state.attributes.source | default('') == 'Morning Routine' }}
+  action:
+    - service: scene.turn_on
+      target:
+        entity_id: scene.morning            # ← Change to your scene entity
+    - service: notify.persistent_notification
+      data:
+        title: "Sonos Dial"
+        message: "Morning Routine started — scene activated!"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXAMPLE 3: Auto-dim lights when playback starts in the evening
+# ─────────────────────────────────────────────────────────────────────────────
+- id: sonos_dial_evening_playback_dim
+  alias: "Sonos Dial — Dim lights on evening playback"
+  description: >
+    When the Sonos starts playing after 20:00, dim the living room lights
+    to 30% for a cosy atmosphere.
+  trigger:
+    - platform: state
+      entity_id: media_player.living_room   # ← Change to your Sonos entity
+      to: "playing"
+  condition:
+    - condition: time
+      after: "20:00:00"
+      before: "23:59:59"
+  action:
+    - service: light.turn_on
+      target:
+        area_id: living_room               # ← Change to your area/entity
+      data:
+        brightness_pct: 30
+        transition: 3
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# EXAMPLE 4: Notify when the dial goes offline
+# Useful to catch Wi-Fi/power issues early
+# ─────────────────────────────────────────────────────────────────────────────
+- id: sonos_dial_offline_notify
+  alias: "Sonos Dial — Notify when offline"
+  description: >
+    Send a persistent notification if the Sonos Dial ESPHome node becomes
+    unavailable (e.g. lost power or Wi-Fi).
+  trigger:
+    - platform: state
+      entity_id: sensor.sonos_dial_wifi_signal  # Auto-created by ESPHome
+      to: "unavailable"
+      for:
+        minutes: 2
+  action:
+    - service: notify.persistent_notification
+      data:
+        title: "Sonos Dial offline"
+        message: >
+          The Sonos Dial has been unreachable for 2 minutes.
+          Check power and Wi-Fi.
