@@ -60,7 +60,7 @@ esphome:
   # Must be in the same folder as this YAML file.
   includes:
     - m5dial_security.h
-    - dsps_fft2r_platform.h   # stub: disables JPEGDEC S3 SIMD (esp-dsp not on path with Arduino framework)
+    - dsps_fft2r_platform.h   # stub: disables JPEGDEC S3 SIMD path (shadows real esp-dsp header)
 
   on_boot:
     # ── Priority 400 — BEFORE the API server starts ─────────────────────────
@@ -109,20 +109,22 @@ esphome:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLATFORM — ESP32-S3, 8 MB flash, Arduino framework
-# (Arduino is required by some ESPHome components; IDF is also possible but
-#  requires testing with the LVGL + GC9A01A stack.)
+# PLATFORM — ESP32-S3, 8 MB flash, IDF framework
+# IDF framework gives direct sdkconfig control over OPI PSRAM, which is
+# required for the LVGL framebuffer (115 KB) and online_image album-art
+# buffer (115 KB).  Arduino + IDF 5.x no longer reliably initialises OPI
+# PSRAM through the ESPHome psram: component.
 # ─────────────────────────────────────────────────────────────────────────────
 esp32:
   board: esp32-s3-devkitc-1
   variant: esp32s3
   framework:
-    type: arduino
+    type: esp-idf
   flash_size: 8MB
 
-# ESPHome 2025.2+ no longer enables PSRAM automatically.
-# The M5Dial has 8 MB OPI PSRAM — required for LVGL framebuffer (115 KB)
-# and the online_image album-art buffer (also 115 KB).
+# The M5Dial has 8 MB OPI PSRAM wired to the ESP32-S3.
+# With IDF framework the psram: component maps directly to CONFIG_SPIRAM_* so
+# initialisation is reliable across IDF versions.
 psram:
   mode: octal
   speed: 80MHz
