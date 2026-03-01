@@ -519,25 +519,38 @@ lvgl:
             text_font: icon_font_28
             text_color: 0xFF9500
 
-        # Currently selected playlist name; scrolls if wider than 200 px
+        # ── Barrel scroll — previous item (dim, small) ───────────────────────
+        - label:
+            id: lbl_playlist_prev
+            text: ""
+            align: CENTER
+            y: -44
+            text_font: font_18
+            text_color: 0x555555
+            long_mode: DOTS
+            width: 160
+
+        # ── Barrel scroll — selected item (bright, large) ─────────────────
         - label:
             id: lbl_playlist_name
             text: "Loading..."
             align: CENTER
-            y: -10
+            y: 0
             text_font: font_24
             text_color: 0xFFFFFF
             long_mode: SCROLL_CIRCULAR
             width: 200
 
-        # "x / y" counter
+        # ── Barrel scroll — next item (dim, small) ────────────────────────
         - label:
-            id: lbl_playlist_index
-            text: "- / -"
-            align: BOTTOM_MID
-            y: -40
+            id: lbl_playlist_next
+            text: ""
+            align: CENTER
+            y: 44
             text_font: font_18
-            text_color: 0xAAAAAA
+            text_color: 0x555555
+            long_mode: DOTS
+            width: 160
 
         # Mode indicator dots — three small dots, bottom-right corner.
         # Active dot is orange; inactive dots are dark grey.
@@ -971,9 +984,12 @@ text_sensor:
       then:
         - lambda: |-
             if (x.empty()) return;
-            // Accept both absolute URLs and relative HA proxy paths
+            // Accept both absolute URLs and relative HA proxy paths.
+            // Append &width=120 so HA resizes the JPEG before sending —
+            // keeps the download well within the device's heap budget.
             std::string url = (x.rfind("http", 0) == 0) ? x
                                                          : "${ha_url}" + x;
+            url += "&width=120";
             id(album_art_img).set_url(url.c_str());
             id(album_art_img).update();
             ESP_LOGI("sonos", "Loading album art: %s", url.c_str());
@@ -1120,7 +1136,7 @@ script:
       - rtttl.play: "mode:d=32,o=5,b=220:c,e"
 
   # ── update_playlist_display ───────────────────────────────────────────────
-  # Refreshes the playlist name and index counter on page 0.
+  # Refreshes the barrel scroll on page 0: prev (dim) / current (bright) / next (dim).
   - id: update_playlist_display
     then:
       - if:
@@ -1128,24 +1144,31 @@ script:
             lambda: 'return id(playlist_count) == 0;'
           then:
             - lvgl.label.update:
-                id: lbl_playlist_name
-                text: "No favourites found"
+                id: lbl_playlist_prev
+                text: ""
             - lvgl.label.update:
-                id: lbl_playlist_index
-                text: "- / -"
+                id: lbl_playlist_name
+                text: "No favourites"
+            - lvgl.label.update:
+                id: lbl_playlist_next
+                text: ""
           else:
             - lvgl.label.update:
+                id: lbl_playlist_prev
+                text: !lambda |
+                  int n = id(playlist_count);
+                  int prev = (id(playlist_index) - 1 + n) % n;
+                  return id(playlist_names)[prev].c_str();
+            - lvgl.label.update:
                 id: lbl_playlist_name
                 text: !lambda |
-                  int idx = id(playlist_index);
-                  return id(playlist_names)[idx].c_str();
+                  return id(playlist_names)[id(playlist_index)].c_str();
             - lvgl.label.update:
-                id: lbl_playlist_index
+                id: lbl_playlist_next
                 text: !lambda |
-                  char buf[16];
-                  snprintf(buf, sizeof(buf), "%d / %d",
-                           id(playlist_index) + 1, id(playlist_count));
-                  return std::string(buf);
+                  int n = id(playlist_count);
+                  int next = (id(playlist_index) + 1) % n;
+                  return id(playlist_names)[next].c_str();
 
   # ── update_volume_display ─────────────────────────────────────────────────
   # Refreshes the arc position and percentage label on page 2.
