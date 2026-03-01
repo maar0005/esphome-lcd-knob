@@ -742,7 +742,7 @@ sensor:
                 break;
             }
 
-    on_counter_clockwise:
+    on_anticlockwise:
       then:
         - script.execute: wake_screen
         - lambda: |-
