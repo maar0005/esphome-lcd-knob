@@ -421,7 +421,8 @@ display:
 # orange (#FF9500) accent colour.
 # ─────────────────────────────────────────────────────────────────────────────
 lvgl:
-  display_id: round_display
+  displays:
+    - round_display
   color_depth: 16
   bg_color:    0x1A1A1A
 
@@ -573,7 +574,7 @@ lvgl:
             width: 240
             height: 80
             bg_color: 0x000000
-            bg_opa: 180
+            bg_opa: 71%
             border_width: 0
             pad_all: 0
             radius: 0
@@ -609,7 +610,7 @@ lvgl:
             text_font: font_20
             text_color: 0xFF9500
             bg_color: 0x000000
-            bg_opa: 160
+            bg_opa: 63%
 
         # ── Mode indicator dots (dot 1 = orange = active) ─────────────────
         - label:
