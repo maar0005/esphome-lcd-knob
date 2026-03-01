@@ -791,7 +791,7 @@ binary_sensor:
     on_multi_click:
       # Short press — released before long_press_duration elapses
       - timing:
-          - ON  for at most  ${long_press_duration}
+          - ON for at most ${long_press_duration}
           - OFF for at least 50ms
         then:
           - script.execute: wake_screen
