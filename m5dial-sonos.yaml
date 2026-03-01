@@ -167,7 +167,7 @@ http_request:
 # ─────────────────────────────────────────────────────────────────────────────
 online_image:
   - id: album_art_img
-    url: ""              # Initial URL — replaced on first entity_picture update
+    url: "http://localhost/placeholder.jpg"   # Placeholder — replaced on first entity_picture update; on_error handles the initial 404
     format: JPEG
     type: RGB565         # 16-bit colour — matches display color_depth: 16
     resize: 240x240      # Scale to fill the round display
