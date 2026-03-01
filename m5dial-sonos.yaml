@@ -146,11 +146,10 @@ captive_portal:
 # (https://www.improv-wifi.com).  Works alongside the captive portal.
 improv_serial:
 
-# Minimal web server — OTA upload only; no log streaming, no entity list.
+# Minimal web server — no log streaming, no entity list.
 web_server:
   port: 80
   log: false
-  ota: true
   include_internal: false
 
 
@@ -209,6 +208,7 @@ api:
 ota:
   - platform: esphome
     password: !secret ota_password
+  - platform: web_server
 
 
 # ─────────────────────────────────────────────────────────────────────────────
