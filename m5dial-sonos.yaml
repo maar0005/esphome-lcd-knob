@@ -14,7 +14,8 @@
 # ─── Quick-start ─────────────────────────────────────────────────────────────
 #  1. Copy secrets.yaml.example → secrets.yaml and fill in your values.
 #  2. Change `sonos_entity` below to your media_player entity ID.
-#  3. Flash: esphome run m5dial-sonos.yaml
+#  3. For multiple dials, give each a unique `device_name` (e.g. sonos-dial-kitchen).
+#  4. Flash: esphome run m5dial-sonos.yaml
 #            or use the ESPHome Dashboard.
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -54,9 +55,7 @@ esphome:
   name: "${device_name}"
   friendly_name: "${friendly_name}"
   min_version: "2024.2.0"   # LVGL requires 2024.2+; ili9xxx gc9a01a model requires 2025.1+
-  # Appends the last 3 bytes of the MAC to the device hostname so multiple
-  # dials on the same network get unique names (e.g. sonos-dial-a1b2c3).
-  name_add_mac_suffix: true
+  name_add_mac_suffix: false
   # Security header — per-device key generation via ESP32 hardware RNG.
   # Must be in the same folder as this YAML file.
   includes:
