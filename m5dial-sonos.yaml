@@ -154,34 +154,27 @@ web_server:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# HTTP CLIENT — required by online_image below.
-# verify_ssl: false avoids issues with HA's self-signed certificate.
+# HTTP CLIENT + ALBUM ART — temporarily disabled to free ~60 KB heap
+# for the 16-bit display buffer (113 KB). Re-enable after display is confirmed.
 # ─────────────────────────────────────────────────────────────────────────────
-http_request:
-  useragent: ESPHome
-  timeout: 10s
-  verify_ssl: false
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# ALBUM ART — Fetched from HA media_player_proxy over HTTP.
-# The entity_picture text_sensor (below) calls set_url() + update() each time
-# the track changes.  Image is stored at 120×120 (28 KB) and zoomed 2× by
-# LVGL to fill the screen — avoids the 115 KB full-size decode without PSRAM.
-# ─────────────────────────────────────────────────────────────────────────────
-online_image:
-  - id: album_art_img
-    url: "http://localhost/placeholder.jpg"   # Placeholder — replaced on first entity_picture update; on_error handles the initial 404
-    format: JPEG
-    type: RGB565         # 16-bit colour — matches display color_depth: 16
-    resize: 120x120      # Decoded size: 120×120×2 = 28 KB (fits in internal SRAM)
-    buffer_size: 32768   # 32 KB — sufficient for a 120×120 JPEG download
-    on_error:
-      then:
-        - logger.log:
-            level: WARN
-            tag: sonos
-            format: "Album art fetch failed — keeping previous image"
+# http_request:
+#   useragent: ESPHome
+#   timeout: 10s
+#   verify_ssl: false
+#
+# online_image:
+#   - id: album_art_img
+#     url: "http://localhost/placeholder.jpg"
+#     format: JPEG
+#     type: RGB565
+#     resize: 120x120
+#     buffer_size: 32768
+#     on_error:
+#       then:
+#         - logger.log:
+#             level: WARN
+#             tag: sonos
+#             format: "Album art fetch failed — keeping previous image"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -422,7 +415,6 @@ display:
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
-    color_palette: 8BIT        # 8-bit (RGB332) buffer = 57 KB; 16-bit = 113 KB → OOM without PSRAM
     show_test_card: true       # DIAGNOSTIC — shows color bars. Remove after testing.
     invert_colors: true
     update_interval: 1s        # DIAGNOSTIC — test_card needs the draw loop. Restore to 'never' after.
@@ -596,13 +588,14 @@ lvgl:
       widgets:
         # ── Album art — full-screen background ────────────────────────────
         # Rendered first so all other widgets draw on top of it.
-        - image:
-            id: lbl_album_art
-            src: album_art_img
-            align: CENTER
-            zoom: 2.0      # 2× — scales 120×120 stored image to fill 240×240
-            pivot_x: 60   # Zoom around image centre so it stays centred
-            pivot_y: 60
+        # DIAGNOSTIC: album art disabled while online_image is commented out
+        # - image:
+        #     id: lbl_album_art
+        #     src: album_art_img
+        #     align: CENTER
+        #     zoom: 2.0
+        #     pivot_x: 60
+        #     pivot_y: 60
 
         # ── Dark bottom strip — improves text contrast over busy artwork ──
         # 80 px tall, fully black, 70 % opacity.
@@ -995,9 +988,10 @@ text_sensor:
             std::string url = (x.rfind("http", 0) == 0) ? x
                                                          : "${ha_url}" + x;
             url += "&width=120";
-            id(album_art_img).set_url(url.c_str());
-            id(album_art_img).update();
-            ESP_LOGI("sonos", "Loading album art: %s", url.c_str());
+            // DIAGNOSTIC: album art disabled while online_image is commented out
+            // id(album_art_img).set_url(url.c_str());
+            // id(album_art_img).update();
+            ESP_LOGI("sonos", "Album art disabled for diag: %s", url.c_str());
 
   # ── player state — "playing" | "paused" | "idle" | "off" ───────────────
   # We subscribe to the entity state itself (no attribute: key needed).
