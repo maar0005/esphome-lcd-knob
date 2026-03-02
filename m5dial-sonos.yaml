@@ -1,11 +1,9 @@
 # ═══════════════════════════════════════════════════════════════════════════════
 # M5Stack Dial — Sonos Playlist Controller
-# ESPHome configuration
-#
-# Minimum ESPHome version: 2024.2 (LVGL support added in 2024.2)
+# ESPHome configuration using M5 library + LovyanGFX for display
 #
 # Hardware: M5Stack Dial (ESP32-S3)
-#   - GC9A01A 240×240 round display
+#   - GC9A01A 240×240 round display (driven by M5Unified/LovyanGFX)
 #   - EC11 rotary encoder
 #   - RC522 NFC (I2C) — initialised but not used
 #   - PCF8563 RTC (I2C)
@@ -16,35 +14,19 @@
 #  2. Change `sonos_entity` below to your media_player entity ID.
 #  3. For multiple dials, give each a unique `device_name` (e.g. sonos-dial-kitchen).
 #  4. Flash: esphome run m5dial-sonos.yaml
-#            or use the ESPHome Dashboard.
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # SUBSTITUTIONS
-# These are the only values you should need to change for a new installation.
 # ─────────────────────────────────────────────────────────────────────────────
 substitutions:
   device_name: "sonos-dial"
   friendly_name: "Sonos Dial"
-
-  # Your Sonos speaker entity in Home Assistant.
-  # Find it: Settings → Devices & Services → Entities → filter "media_player"
   sonos_entity: "media_player.living_room"
-
-  # IANA timezone string for the RTC clock sync
   timezone: "Europe/Copenhagen"
-
-  # How long the button must be held to trigger a mode change (long press)
   long_press_duration: "800ms"
-
-  # Inactivity timeout in milliseconds before the screen dims to 10 %
-  # Dimming is suppressed while music is playing — see dim_screen_timer.
   screen_off_time: "30000"
-
-  # Base URL of your Home Assistant instance.
-  # Album art is fetched by prepending this to the entity_picture attribute path.
-  # Examples: "http://homeassistant.local:8123"  or  "http://192.168.1.100:8123"
   ha_url: "http://homeassistant.local:8123"
 
 
@@ -54,33 +36,14 @@ substitutions:
 esphome:
   name: "${device_name}"
   friendly_name: "${friendly_name}"
-  min_version: "2024.2.0"   # LVGL requires 2024.2+; ili9xxx gc9a01a model requires 2025.1+
+  min_version: "2024.2.0"
   name_add_mac_suffix: false
   platformio_options:
     board_build.flash_mode: qio
-  on_boot:
-    - priority: 200
-      then:
-        - lambda: |-
-            id(current_mode)    = 0;
-            id(playlist_index)  = 0;
-            id(playlist_count)  = 0;
-            id(current_volume)  = 0.0f;
-            id(is_playing)      = false;
-        - script.execute: wake_screen
-        # Show setup page if no Wi-Fi; playlist page if already connected
-        - if:
-            condition:
-              wifi.connected:
-            then:
-              - lvgl.page.show: page_playlist
-            else:
-              - lvgl.page.show: page_setup
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLATFORM — ESP32-S3FN8, 8 MB flash, ESP-IDF framework
-# Matches the official ESPHome M5Stack Dial reference config exactly.
+# PLATFORM — ESP32-S3FN8, Arduino framework (required by M5 library)
 # ─────────────────────────────────────────────────────────────────────────────
 esp32:
   board: esp32-s3-devkitc-1
@@ -91,51 +54,38 @@ esp32:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# EXTERNAL COMPONENTS — local M5Dial Sonos UI component
+# ─────────────────────────────────────────────────────────────────────────────
+external_components:
+  - source:
+      type: git
+      url: https://github.com/maar0005/M5dial-Sonos
+      ref: main
+    components: [m5dial_sonos]
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# M5DIAL SONOS — Custom display + UI component
+# ─────────────────────────────────────────────────────────────────────────────
+m5dial_sonos:
+  id: sonos_ui
+  sonos_entity: "${sonos_entity}"
+  screen_off_time: ${screen_off_time}
+  volume_step: 2
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # WI-FI
-# No ssid/password — Wi-Fi credentials are provisioned at runtime via
-# improv_serial (USB).  Previously stored credentials are loaded from NVS
-# automatically on boot.
 # ─────────────────────────────────────────────────────────────────────────────
 wifi:
   ssid: !secret wifi_ssid
   password: !secret wifi_password
-  # Switch to the main UI page once Wi-Fi connects after provisioning/reboot
-  on_connect:
-    then:
-      - lvgl.page.show: page_playlist
 
-# Improv Wi-Fi — allows provisioning via USB serial using a web browser
-# (https://www.improv-wifi.com).
 improv_serial:
-
-# ─────────────────────────────────────────────────────────────────────────────
-# HTTP CLIENT + ALBUM ART — temporarily disabled to free ~60 KB heap
-# for the 16-bit display buffer (113 KB). Re-enable after display is confirmed.
-# ─────────────────────────────────────────────────────────────────────────────
-# http_request:
-#   useragent: ESPHome
-#   timeout: 10s
-#   verify_ssl: false
-#
-# online_image:
-#   - id: album_art_img
-#     url: "http://localhost/placeholder.jpg"
-#     format: JPEG
-#     type: RGB565
-#     resize: 120x120
-#     buffer_size: 32768
-#     on_error:
-#       then:
-#         - logger.log:
-#             level: WARN
-#             tag: sonos
-#             format: "Album art fetch failed — keeping previous image"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # HOME ASSISTANT API
-# homeassistant_states: true is REQUIRED for text_sensor platform: homeassistant
-# to receive entity attribute updates.
 # ─────────────────────────────────────────────────────────────────────────────
 api:
   homeassistant_states: true
@@ -143,63 +93,28 @@ api:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # LOGGER
-# Change level to DEBUG when troubleshooting display or Sonos attribute issues.
 # ─────────────────────────────────────────────────────────────────────────────
 logger:
   level: WARN
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# I2C — Internal bus
-#   0x51 = PCF8563 RTC
-#   0x28 = RC522 NFC reader (present on board; we initialise the bus so
-#          the chip doesn't glitch, but we don't add an ESPHome component for it)
+# I2C — Internal bus (RTC + NFC)
 # ─────────────────────────────────────────────────────────────────────────────
 i2c:
   sda: GPIO11
   scl: GPIO12
-  scan: false   # Disable scan in production to avoid boot-time log noise
+  scan: false
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SPI — Display bus
-# MOSI and CLK are declared here; CS and DC live on the display component.
-# ─────────────────────────────────────────────────────────────────────────────
-spi:
-  clk_pin:  GPIO6
-  mosi_pin: GPIO5
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# OUTPUTS
+# OUTPUTS — Buzzer only (backlight managed by M5 library)
 # ─────────────────────────────────────────────────────────────────────────────
 output:
-  # Backlight — PWM on GPIO9
-  - platform: ledc
-    pin: GPIO9
-    id: backlight_output
-    frequency: 1000Hz
-
-  # Passive buzzer — PWM on GPIO3; driven by the rtttl component below
   - platform: ledc
     pin: GPIO3
     id: buzzer_output
     frequency: 1000Hz
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LIGHT — Monochromatic wrapper around backlight_output.
-# Gives us transition effects and a named entity in HA.
-# ─────────────────────────────────────────────────────────────────────────────
-light:
-  - platform: monochromatic
-    output: backlight_output
-    id: backlight
-    name: "${friendly_name} Backlight"
-    default_transition_length: 500ms
-    restore_mode: ALWAYS_ON
-    initial_state:
-      brightness: 100%
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -211,48 +126,7 @@ rtttl:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FONTS
-# Fetched from Google Fonts via gfonts:// at build time and cached locally.
-# All sizes used in LVGL widgets must be declared here.
-# ─────────────────────────────────────────────────────────────────────────────
-font:
-  - file: "gfonts://Material+Symbols+Outlined"
-    id: icon_font_14
-    size: 14
-    glyphs:
-      - "\U0000E061"  # fiber_manual_record — solid circle for mode-indicator dots
-  - file: "gfonts://Material+Symbols+Outlined"
-    id: icon_font_20
-    size: 20
-    glyphs:
-      - "\U0000E050"  # play_arrow
-      - "\U0000E034"  # pause
-  - file: "gfonts://Material+Symbols+Outlined"
-    id: icon_font_28
-    size: 28
-    glyphs:
-      - "\U0000E89F"  # music_note
-  - file: "gfonts://Montserrat"
-    id: font_14
-    size: 14
-  - file: "gfonts://Montserrat"
-    id: font_16
-    size: 16
-  - file: "gfonts://Montserrat"
-    id: font_18
-    size: 18
-  - file: "gfonts://Montserrat"
-    id: font_24
-    size: 24
-  - file: "gfonts://Montserrat"
-    id: font_36
-    size: 36
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# TIME
-# Dual source: HA (network, primary) + PCF8563 RTC (hardware, fallback).
-# on_time_sync pushes the HA time into the RTC so it survives power cycles.
+# TIME — HA (primary) + PCF8563 RTC (fallback)
 # ─────────────────────────────────────────────────────────────────────────────
 time:
   - platform: homeassistant
@@ -270,345 +144,17 @@ time:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# GLOBALS — Shared state between lambdas and scripts
+# GLOBALS — Minimal shared state for YAML ↔ component bridge
 # ─────────────────────────────────────────────────────────────────────────────
 globals:
-  # Active UI mode: 0 = Playlist, 1 = Now Playing, 2 = Volume
-  - id: current_mode
-    type: int
-    restore_value: false
-    initial_value: "0"
-
-  # Zero-based index into playlist_names; wraps at playlist_count
-  - id: playlist_index
-    type: int
-    restore_value: false
-    initial_value: "0"
-
-  # Number of playlists in playlist_names (0 means none loaded yet)
-  - id: playlist_count
-    type: int
-    restore_value: false
-    initial_value: "0"
-
-  # Volume 0.0–1.0, mirroring Sonos volume_level attribute
-  - id: current_volume
-    type: float
-    restore_value: false
-    initial_value: "0.0"
-
-  # Playback state mirror from HA: true = playing
-  - id: is_playing
-    type: bool
-    restore_value: false
-    initial_value: "false"
-
-  # Parsed Sonos favourites list; filled by the source_list text_sensor
-  - id: playlist_names
-    type: std::vector<std::string>
-    restore_value: false
-
-  # Temporary buffer holding the playlist name for the HA service call.
-  # We can't reference a std::string local inside the async service template,
-  # so we stash it here before firing do_select_source.
   - id: pending_playlist_name
     type: std::string
     restore_value: false
     initial_value: '""'
 
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# DISPLAY — GC9A01A 240×240 round, SPI
-# ─────────────────────────────────────────────────────────────────────────────
-display:
-  - platform: ili9xxx
-    model: GC9A01A
-    id: round_display
-    cs_pin: GPIO7
-    dc_pin: GPIO4
-    reset_pin: GPIO8
-    invert_colors: true
-    auto_clear_enabled: false
-    update_interval: never
-    dimensions:
-      height: 240
-      width: 240
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# LVGL — UI framework (requires ESPHome ≥ 2024.2)
-#
-# Three pages, one per mode.  All share a dark (#1a1a1a) background and
-# orange (#FF9500) accent colour.
-# ─────────────────────────────────────────────────────────────────────────────
-lvgl:
-  displays:
-    - round_display
-  color_depth: 16
-  bg_color:    0x1A1A1A
-  # Partial render buffer: 10% of screen = ~11.5 KB.
-  # Reduced from 12% to free ~3 KB for JPEG decoder allocation.
-  buffer_size: 10%
-
-  pages:
-
-    # ── PAGE SETUP: PROVISIONING ─────────────────────────────────────────────
-    # Shown on first boot (no Wi-Fi).  Guides the user through provisioning.
-    # Switches to page_playlist automatically via wifi.on_connect above.
-    - id: page_setup
-      bg_color: 0x1A1A1A
-      widgets:
-        - label:
-            text: "SETUP"
-            align: CENTER
-            y: -40
-            text_font: font_24
-            text_color: 0xFF9500
-
-        - label:
-            text: "Connecting to Wi-Fi..."
-            align: CENTER
-            y: 10
-            text_font: font_16
-            text_color: 0xAAAAAA
-
-    # ── PAGE 0: PLAYLIST ────────────────────────────────────────────────────
-    - id: page_playlist
-      bg_color: 0x1A1A1A
-      widgets:
-        # Music note glyph — decorative header
-        - label:
-            id: lbl_music_icon
-            text: "\U0000E89F"
-            align: TOP_MID
-            y: 18
-            text_font: icon_font_28
-            text_color: 0xFF9500
-
-        # ── Barrel scroll — previous item (dim, small) ───────────────────────
-        - label:
-            id: lbl_playlist_prev
-            text: ""
-            align: CENTER
-            y: -44
-            text_font: font_18
-            text_color: 0x555555
-            long_mode: DOT
-            width: 160
-
-        # ── Barrel scroll — selected item (bright, large) ─────────────────
-        - label:
-            id: lbl_playlist_name
-            text: "Loading..."
-            align: CENTER
-            y: 0
-            text_font: font_24
-            text_color: 0xFFFFFF
-            long_mode: SCROLL_CIRCULAR
-            width: 200
-
-        # ── Barrel scroll — next item (dim, small) ────────────────────────
-        - label:
-            id: lbl_playlist_next
-            text: ""
-            align: CENTER
-            y: 44
-            text_font: font_18
-            text_color: 0x555555
-            long_mode: DOT
-            width: 160
-
-        # Mode indicator dots — three small dots, bottom-right corner.
-        # Active dot is orange; inactive dots are dark grey.
-        - label:
-            id: dot_p0_0
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -14
-            y: -12
-            text_font: icon_font_14
-            text_color: 0xFF9500   # Active (mode 0)
-        - label:
-            id: dot_p0_1
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -30
-            y: -12
-            text_font: icon_font_14
-            text_color: 0x444444
-        - label:
-            id: dot_p0_2
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -46
-            y: -12
-            text_font: icon_font_14
-            text_color: 0x444444
-
-    # ── PAGE 1: NOW PLAYING (album art) ─────────────────────────────────────
-    # Layout (bottom → top in LVGL z-order = declaration order here):
-    #   1. Full-screen album art (240×240 JPEG, fetched from HA)
-    #   2. Dark bottom strip (obj) for text readability over the image
-    #   3. Track title + artist labels
-    #   4. Play/pause icon (top, small dark pill)
-    #   5. Mode dots
-    - id: page_now_playing
-      bg_color: 0x000000
-      widgets:
-        # ── Album art — full-screen background ────────────────────────────
-        # Rendered first so all other widgets draw on top of it.
-        # DIAGNOSTIC: album art disabled while online_image is commented out
-        # - image:
-        #     id: lbl_album_art
-        #     src: album_art_img
-        #     align: CENTER
-        #     zoom: 2.0
-        #     pivot_x: 60
-        #     pivot_y: 60
-
-        # ── Dark bottom strip — improves text contrast over busy artwork ──
-        # 80 px tall, fully black, 70 % opacity.
-        - obj:
-            align: BOTTOM_MID
-            width: 240
-            height: 80
-            bg_color: 0x000000
-            bg_opa: 71%
-            border_width: 0
-            pad_all: 0
-            radius: 0
-
-        # ── Track title ───────────────────────────────────────────────────
-        - label:
-            id: lbl_track_title
-            text: "—"
-            align: BOTTOM_MID
-            y: -48
-            text_font: font_18
-            text_color: 0xFFFFFF
-            long_mode: SCROLL_CIRCULAR
-            width: 200
-
-        # ── Artist name ───────────────────────────────────────────────────
-        - label:
-            id: lbl_artist
-            text: ""
-            align: BOTTOM_MID
-            y: -25
-            text_font: font_14
-            text_color: 0xCCCCCC
-            long_mode: SCROLL_CIRCULAR
-            width: 200
-
-        # ── Play ▶ / Pause ⏸ icon — small pill at the top ────────────────
-        - label:
-            id: lbl_play_icon
-            text: "\U0000E050"
-            align: TOP_MID
-            y: 14
-            text_font: icon_font_20
-            text_color: 0xFF9500
-            bg_color: 0x000000
-            bg_opa: 63%
-
-        # ── Mode indicator dots (dot 1 = orange = active) ─────────────────
-        - label:
-            id: dot_p1_0
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -14
-            y: -12
-            text_font: icon_font_14
-            text_color: 0x444444
-        - label:
-            id: dot_p1_1
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -30
-            y: -12
-            text_font: icon_font_14
-            text_color: 0xFF9500   # Active (mode 1)
-        - label:
-            id: dot_p1_2
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -46
-            y: -12
-            text_font: icon_font_14
-            text_color: 0x444444
-
-    # ── PAGE 2: VOLUME ──────────────────────────────────────────────────────
-    - id: page_volume
-      bg_color: 0x1A1A1A
-      widgets:
-        # "Volume" header label
-        - label:
-            id: lbl_volume_title
-            text: "Volume"
-            align: TOP_MID
-            y: 18
-            text_font: font_18
-            text_color: 0xFF9500
-
-        # Arc around the perimeter — visual level indicator.
-        # adjustable: false because we drive the value programmatically.
-        # start_angle/end_angle: 135→45 draws a 270° arc (gap at bottom).
-        - arc:
-            id: arc_volume
-            align: CENTER
-            width: 210
-            height: 210
-            min_value: 0
-            max_value: 100
-            value: 0
-            adjustable: false
-            arc_color: 0x333333   # background track (main part)
-            arc_width: 8
-            indicator:
-              arc_color: 0xFF9500 # foreground value arc
-              arc_width: 8
-            start_angle: 135
-            end_angle: 45
-
-        # Large percentage number in the centre of the arc
-        - label:
-            id: lbl_volume_pct
-            text: "0%"
-            align: CENTER
-            text_font: font_36
-            text_color: 0xFFFFFF
-
-        # Mode indicator dots (dot 2 = orange = active)
-        - label:
-            id: dot_p2_0
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -14
-            y: -12
-            text_font: icon_font_14
-            text_color: 0x444444
-        - label:
-            id: dot_p2_1
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -30
-            y: -12
-            text_font: icon_font_14
-            text_color: 0x444444
-        - label:
-            id: dot_p2_2
-            text: "\U0000E061"
-            align: BOTTOM_RIGHT
-            x: -46
-            y: -12
-            text_font: icon_font_14
-            text_color: 0xFF9500   # Active (mode 2)
-
-
 # ─────────────────────────────────────────────────────────────────────────────
 # SENSOR — Rotary encoder (GPIO40 = A, GPIO41 = B)
-# on_clockwise / on_counter_clockwise fire on each detent; no raw values used.
 # ─────────────────────────────────────────────────────────────────────────────
 sensor:
   - platform: rotary_encoder
@@ -619,64 +165,31 @@ sensor:
 
     on_clockwise:
       then:
-        - script.execute: wake_screen
+        - lambda: 'id(sonos_ui).on_rotary_cw();'
         - lambda: |-
-            switch (id(current_mode)) {
-              case 0:  // Playlist — advance to next (wrap)
-                if (id(playlist_count) > 0) {
-                  id(playlist_index) = (id(playlist_index) + 1) % id(playlist_count);
-                  id(update_playlist_display).execute();
-                }
-                break;
-              case 1:  // Now Playing — skip to next track
-                id(action_next_track).execute();
-                break;
-              case 2:  // Volume — +2 %, clamped to 100 %
-                {
-                  float v = id(current_volume) + 0.02f;
-                  if (v > 1.0f) v = 1.0f;
-                  id(current_volume) = v;
-                  id(action_set_volume).execute();
-                  id(update_volume_display).execute();
-                }
-                break;
+            int mode = id(sonos_ui).get_mode();
+            if (mode == 1) {
+              id(action_next_track).execute();
+            } else if (mode == 2) {
+              id(action_set_volume).execute();
             }
 
     on_anticlockwise:
       then:
-        - script.execute: wake_screen
+        - lambda: 'id(sonos_ui).on_rotary_ccw();'
         - lambda: |-
-            switch (id(current_mode)) {
-              case 0:  // Playlist — go to previous (wrap)
-                if (id(playlist_count) > 0) {
-                  id(playlist_index) =
-                    (id(playlist_index) - 1 + id(playlist_count)) % id(playlist_count);
-                  id(update_playlist_display).execute();
-                }
-                break;
-              case 1:  // Now Playing — previous track
-                id(action_prev_track).execute();
-                break;
-              case 2:  // Volume — -2 %, clamped to 0 %
-                {
-                  float v = id(current_volume) - 0.02f;
-                  if (v < 0.0f) v = 0.0f;
-                  id(current_volume) = v;
-                  id(action_set_volume).execute();
-                  id(update_volume_display).execute();
-                }
-                break;
+            int mode = id(sonos_ui).get_mode();
+            if (mode == 1) {
+              id(action_prev_track).execute();
+            } else if (mode == 2) {
+              id(action_set_volume).execute();
             }
 
 
-
 # ─────────────────────────────────────────────────────────────────────────────
-# BINARY SENSORS — Buttons
+# BINARY SENSORS — Main button
 # ─────────────────────────────────────────────────────────────────────────────
 binary_sensor:
-  # ── Main button GPIO42 ──────────────────────────────────────────────────
-  # on_multi_click distinguishes short press (< long_press_duration) from
-  # long press (≥ long_press_duration).
   - platform: gpio
     pin:
       number: GPIO42
@@ -685,149 +198,69 @@ binary_sensor:
     id: main_button
     name: "${friendly_name} Button"
     on_multi_click:
-      # Short press — released before long_press_duration elapses
+      # Short press
       - timing:
           - ON for at most ${long_press_duration}
           - OFF for at least 50ms
         then:
-          - script.execute: wake_screen
+          - lambda: 'id(sonos_ui).on_short_press();'
           - lambda: |-
-              switch (id(current_mode)) {
-                case 0:  // Playlist → play selected playlist with shuffle
-                  id(action_play_playlist).execute();
-                  break;
-                case 1:  // Now Playing → toggle play/pause
-                case 2:  // Volume → toggle play/pause
-                  id(action_play_pause).execute();
-                  break;
+              int mode = id(sonos_ui).get_mode();
+              if (mode == 0) {
+                id(action_play_playlist).execute();
+              } else {
+                id(action_play_pause).execute();
               }
 
-      # Long press — held for at least long_press_duration → cycle mode
+      # Long press — cycle mode
       - timing:
           - ON for at least ${long_press_duration}
         then:
-          - script.execute: wake_screen
-          - script.execute: next_mode
-
+          - lambda: 'id(sonos_ui).on_long_press();'
+          - rtttl.play: "mode:d=32,o=5,b=220:c,e"
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TEXT SENSORS — Live attribute subscriptions from Home Assistant
-#
-# platform: homeassistant  +  attribute:  subscribes to a single attribute
-# on the given entity.  The value arrives as a string every time HA updates it.
-# homeassistant_states: true (set in api: above) is required for this to work.
 # ─────────────────────────────────────────────────────────────────────────────
 text_sensor:
-  # ── source_list ─────────────────────────────────────────────────────────
-  # Arrives as a JSON array string, e.g.: ["Jazz Classics","Rock Mix"]
-  # We parse it into the playlist_names global vector with a hand-rolled
-  # parser — more reliable in a C++ lambda than calling an external library.
+  # ── source_list — JSON array of Sonos favourites ───────────────────
   - platform: homeassistant
     id: ts_source_list
     entity_id: "${sonos_entity}"
     attribute: source_list
     on_value:
       then:
-        - lambda: |-
-            id(playlist_names).clear();
+        - lambda: 'id(sonos_ui).set_playlist_json(x);'
 
-            std::string raw = x;
-
-            // Trim leading/trailing whitespace
-            size_t s = raw.find_first_not_of(" \t\r\n");
-            size_t e = raw.find_last_not_of(" \t\r\n");
-            if (s == std::string::npos) { raw.clear(); }
-            else { raw = raw.substr(s, e - s + 1); }
-
-            // Must start with '[' — if not, the attribute was not a list
-            if (raw.empty() || raw.front() != '[') {
-              ESP_LOGW("sonos", "source_list is not a JSON array: %s", raw.c_str());
-              id(playlist_count) = 0;
-              id(update_playlist_display).execute();
-              return;
-            }
-
-            // Strip the outer [ ]
-            raw = raw.substr(1, raw.size() > 2 ? raw.size() - 2 : 0);
-
-            // Walk through the comma-separated quoted strings
-            bool   in_quote    = false;
-            bool   escape_next = false;
-            std::string token;
-
-            for (char c : raw) {
-              if (escape_next) {
-                token      += c;
-                escape_next = false;
-                continue;
-              }
-              if (c == '\\') { escape_next = true; continue; }
-              if (c == '"') {
-                if (!in_quote) {
-                  in_quote = true;
-                  token.clear();
-                } else {
-                  if (!token.empty()) id(playlist_names).push_back(token);
-                  in_quote = false;
-                }
-                continue;
-              }
-              if (in_quote) token += c;
-              // Commas outside quotes are separators — the quote pairing handles that
-            }
-
-            id(playlist_count) = (int)id(playlist_names).size();
-
-            // Clamp index to the new list length
-            if (id(playlist_count) > 0 &&
-                id(playlist_index) >= id(playlist_count)) {
-              id(playlist_index) = 0;
-            }
-
-            id(update_playlist_display).execute();
-            ESP_LOGI("sonos", "Parsed %d playlists from source_list",
-                     id(playlist_count));
-
-  # ── media_title ─────────────────────────────────────────────────────────
+  # ── media_title ────────────────────────────────────────────────────
   - platform: homeassistant
     id: ts_media_title
     entity_id: "${sonos_entity}"
     attribute: media_title
     on_value:
       then:
-        - lvgl.label.update:
-            id: lbl_track_title
-            text: !lambda 'return x.c_str();'
+        - lambda: 'id(sonos_ui).set_media_title(x);'
 
-  # ── media_artist ────────────────────────────────────────────────────────
+  # ── media_artist ───────────────────────────────────────────────────
   - platform: homeassistant
     id: ts_media_artist
     entity_id: "${sonos_entity}"
     attribute: media_artist
     on_value:
       then:
-        - lvgl.label.update:
-            id: lbl_artist
-            text: !lambda 'return x.c_str();'
+        - lambda: 'id(sonos_ui).set_media_artist(x);'
 
-  # ── volume_level — arrives as float string "0.45" (0.0–1.0) ────────────
+  # ── volume_level — float string "0.45" (0.0–1.0) ──────────────────
   - platform: homeassistant
     id: ts_volume_level
     entity_id: "${sonos_entity}"
     attribute: volume_level
     on_value:
       then:
-        - lambda: |-
-            float vol = atof(x.c_str());
-            vol = vol < 0.0f ? 0.0f : (vol > 1.0f ? 1.0f : vol);
-            id(current_volume) = vol;
-            id(update_volume_display).execute();
+        - lambda: 'id(sonos_ui).set_volume_level(atof(x.c_str()));'
 
-  # ── entity_picture — album art URL from HA media_player proxy ──────────
-  # HA returns a relative path such as:
-  #   /api/media_player_proxy/media_player.living_room?token=abc&cache=xyz
-  # We prepend ha_url to build the full URL and hand it to online_image.
+  # ── entity_picture — album art URL (unused for now) ────────────────
   - platform: homeassistant
     id: ts_entity_picture
     entity_id: "${sonos_entity}"
@@ -836,180 +269,33 @@ text_sensor:
       then:
         - lambda: |-
             if (x.empty()) return;
-            // Accept both absolute URLs and relative HA proxy paths.
-            // Append &width=120 so HA resizes the JPEG before sending —
-            // keeps the download well within the device's heap budget.
-            std::string url = (x.rfind("http", 0) == 0) ? x
-                                                         : "${ha_url}" + x;
-            url += "&width=120";
-            // DIAGNOSTIC: album art disabled while online_image is commented out
-            // id(album_art_img).set_url(url.c_str());
-            // id(album_art_img).update();
-            ESP_LOGI("sonos", "Album art disabled for diag: %s", url.c_str());
+            ESP_LOGI("sonos", "Album art URL received (not rendered): %s", x.c_str());
 
-  # ── player state — "playing" | "paused" | "idle" | "off" ───────────────
-  # We subscribe to the entity state itself (no attribute: key needed).
+  # ── player state — "playing" | "paused" | "idle" | "off" ──────────
   - platform: homeassistant
     id: ts_player_state
     entity_id: "${sonos_entity}"
     on_value:
       then:
-        - lambda: |-
-            id(is_playing) = (x == "playing");
-        # When playback starts: show album art page, wake screen, (re)start
-        # dim timer — the timer will not dim while is_playing is true.
-        - if:
-            condition:
-              lambda: 'return id(is_playing);'
-            then:
-              - light.turn_on:
-                  id: backlight
-                  brightness: 100%
-              - script.execute: dim_screen_timer
-              - lambda: 'id(current_mode) = 1;'
-              - lvgl.page.show: page_now_playing
-              - lvgl.label.update:
-                  id: lbl_play_icon
-                  text: "\U0000E034"   # pause (Material Symbols)
-            else:
-              # Not playing: restart dim countdown, update icon
-              - script.execute: dim_screen_timer
-              - lvgl.label.update:
-                  id: lbl_play_icon
-                  text: "\U0000E050"   # play_arrow (Material Symbols)
-
+        - lambda: 'id(sonos_ui).set_player_state(x);'
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SCRIPTS
+# SCRIPTS — HA service calls only
 # ─────────────────────────────────────────────────────────────────────────────
 script:
 
-  # ── wake_screen ───────────────────────────────────────────────────────────
-  # Restores full brightness and resets the inactivity timer.
-  # Called at the start of every user interaction.
-  - id: wake_screen
-    then:
-      - light.turn_on:
-          id: backlight
-          brightness: 100%
-      # Restart the dim timer (mode: restart makes the next call reset the delay)
-      - script.execute: dim_screen_timer
-
-  # ── dim_screen_timer ──────────────────────────────────────────────────────
-  # Waits screen_off_time ms then dims the backlight to 10 % — but only when
-  # music is NOT playing.  While Sonos is playing the screen stays bright.
-  # mode: restart means each call to script.execute restarts the countdown,
-  # so interactions and play/pause state changes reset the timer.
-  - id: dim_screen_timer
-    mode: restart
-    then:
-      - delay: !lambda 'return (uint32_t)${screen_off_time};'
-      - if:
-          condition:
-            lambda: 'return !id(is_playing);'
-          then:
-            - light.turn_on:
-                id: backlight
-                brightness: 10%
-
-  # ── next_mode ─────────────────────────────────────────────────────────────
-  # Advances current_mode 0→1→2→0, shows the matching LVGL page, beeps.
-  - id: next_mode
-    then:
-      - lambda: 'id(current_mode) = (id(current_mode) + 1) % 3;'
-      - script.execute: mode_beep
-      # Switch page — use conditional actions so the LVGL thread is respected
-      - if:
-          condition:
-            lambda: 'return id(current_mode) == 0;'
-          then:
-            - lvgl.page.show: page_playlist
-      - if:
-          condition:
-            lambda: 'return id(current_mode) == 1;'
-          then:
-            - lvgl.page.show: page_now_playing
-      - if:
-          condition:
-            lambda: 'return id(current_mode) == 2;'
-          then:
-            - lvgl.page.show: page_volume
-            - script.execute: update_volume_display
-
-  # ── mode_beep ─────────────────────────────────────────────────────────────
-  # Two short ascending notes played via RTTTL on mode change.
-  - id: mode_beep
-    then:
-      - rtttl.play: "mode:d=32,o=5,b=220:c,e"
-
-  # ── update_playlist_display ───────────────────────────────────────────────
-  # Refreshes the barrel scroll on page 0: prev (dim) / current (bright) / next (dim).
-  - id: update_playlist_display
-    then:
-      - if:
-          condition:
-            lambda: 'return id(playlist_count) == 0;'
-          then:
-            - lvgl.label.update:
-                id: lbl_playlist_prev
-                text: ""
-            - lvgl.label.update:
-                id: lbl_playlist_name
-                text: "No favourites"
-            - lvgl.label.update:
-                id: lbl_playlist_next
-                text: ""
-          else:
-            - lvgl.label.update:
-                id: lbl_playlist_prev
-                text: !lambda |
-                  int n = id(playlist_count);
-                  int prev = (id(playlist_index) - 1 + n) % n;
-                  return id(playlist_names)[prev].c_str();
-            - lvgl.label.update:
-                id: lbl_playlist_name
-                text: !lambda |
-                  return id(playlist_names)[id(playlist_index)].c_str();
-            - lvgl.label.update:
-                id: lbl_playlist_next
-                text: !lambda |
-                  int n = id(playlist_count);
-                  int next = (id(playlist_index) + 1) % n;
-                  return id(playlist_names)[next].c_str();
-
-  # ── update_volume_display ─────────────────────────────────────────────────
-  # Refreshes the arc position and percentage label on page 2.
-  - id: update_volume_display
-    then:
-      - lvgl.arc.update:
-          id: arc_volume
-          value: !lambda 'return (int)(id(current_volume) * 100.0f + 0.5f);'
-      - lvgl.label.update:
-          id: lbl_volume_pct
-          text: !lambda |
-            char buf[8];
-            snprintf(buf, sizeof(buf), "%d%%",
-                     (int)(id(current_volume) * 100.0f + 0.5f));
-            return std::string(buf);
-
-  # ── action_play_playlist ──────────────────────────────────────────────────
-  # Stores the selected playlist name, then fires the HA service calls.
-  # We cannot reference a stack-allocated std::string from inside
-  # homeassistant.service data_template, so we buffer it in the global first.
+  # ── action_play_playlist ────────────────────────────────────────────
   - id: action_play_playlist
     then:
       - lambda: |-
-          if (id(playlist_count) == 0) return;
-          id(pending_playlist_name) = id(playlist_names)[id(playlist_index)];
+          if (id(sonos_ui).get_playlist_count() == 0) return;
+          id(pending_playlist_name) = id(sonos_ui).get_current_playlist_name();
           ESP_LOGI("sonos", "Selecting playlist: %s",
                    id(pending_playlist_name).c_str());
       - script.execute: do_select_source
 
-  # ── do_select_source ──────────────────────────────────────────────────────
-  # Fires the two HA service calls: select_source, then shuffle_set true.
-  # `variables:` passes C++ values; `data_template:` forwards them as HA
-  # Jinja2 template variables — this is the correct ESPHome pattern.
+  # ── do_select_source ────────────────────────────────────────────────
   - id: do_select_source
     then:
       - homeassistant.service:
@@ -1026,7 +312,7 @@ script:
             entity_id: "${sonos_entity}"
             shuffle: "true"
 
-  # ── action_play_pause ─────────────────────────────────────────────────────
+  # ── action_play_pause ───────────────────────────────────────────────
   - id: action_play_pause
     then:
       - homeassistant.service:
@@ -1034,7 +320,7 @@ script:
           data:
             entity_id: "${sonos_entity}"
 
-  # ── action_next_track ─────────────────────────────────────────────────────
+  # ── action_next_track ───────────────────────────────────────────────
   - id: action_next_track
     then:
       - homeassistant.service:
@@ -1042,7 +328,7 @@ script:
           data:
             entity_id: "${sonos_entity}"
 
-  # ── action_prev_track ─────────────────────────────────────────────────────
+  # ── action_prev_track ───────────────────────────────────────────────
   - id: action_prev_track
     then:
       - homeassistant.service:
@@ -1050,16 +336,13 @@ script:
           data:
             entity_id: "${sonos_entity}"
 
-  # ── action_set_volume ─────────────────────────────────────────────────────
-  # Sends current_volume (0.0–1.0) to Sonos.
-  # The volume_level service parameter expects a float; we convert to string
-  # for the HA template, which HA then casts back to float internally.
+  # ── action_set_volume ───────────────────────────────────────────────
   - id: action_set_volume
     then:
       - homeassistant.service:
           service: media_player.volume_set
           variables:
-            vol: !lambda 'return id(current_volume);'
+            vol: !lambda 'return id(sonos_ui).get_volume();'
           data:
             entity_id: "${sonos_entity}"
           data_template:
