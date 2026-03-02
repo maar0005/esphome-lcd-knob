@@ -95,8 +95,9 @@ esp32:
 # automatically on boot.
 # ─────────────────────────────────────────────────────────────────────────────
 wifi:
-  # Open fallback AP for provisioning.  Password left blank so any phone can
-  # connect without needing to share a passphrase.
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  # Open fallback AP if the configured network is unreachable.
   ap:
     ssid: "${friendly_name} Setup"
     password: ""
