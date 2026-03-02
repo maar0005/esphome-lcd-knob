@@ -102,6 +102,10 @@ wifi:
     then:
       - lvgl.page.show: page_playlist
 
+# Improv Wi-Fi — allows provisioning via USB serial using a web browser
+# (https://www.improv-wifi.com).
+improv_serial:
+
 # ─────────────────────────────────────────────────────────────────────────────
 # HTTP CLIENT + ALBUM ART — temporarily disabled to free ~60 KB heap
 # for the 16-bit display buffer (113 KB). Re-enable after display is confirmed.
