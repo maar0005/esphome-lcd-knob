@@ -411,6 +411,7 @@ display:
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
+    invert_colors: true
     update_interval: never     # LVGL drives all redraws
     auto_clear_enabled: false
 
