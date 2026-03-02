@@ -328,9 +328,8 @@ display:
     cs_pin: GPIO7
     dc_pin: GPIO4
     reset_pin: GPIO8
+    data_rate: 20MHz
     invert_colors: true
-    auto_clear_enabled: false
-    update_interval: never
     show_test_card: true
 
 
