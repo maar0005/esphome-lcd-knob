@@ -57,7 +57,7 @@ esphome:
   min_version: "2024.2.0"   # LVGL requires 2024.2+; ili9xxx gc9a01a model requires 2025.1+
   name_add_mac_suffix: false
   platformio_options:
-    board_build.flash_mode: dio
+    board_build.flash_mode: qio
   on_boot:
     - priority: 200
       then:
