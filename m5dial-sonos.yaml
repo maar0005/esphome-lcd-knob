@@ -109,18 +109,16 @@ esphome:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# PLATFORM — ESP32-S3FN8, 8 MB flash, Arduino framework
-# The M5StampS3 uses ESP32-S3FN8: 8 MB flash, NO PSRAM.
-# psram: component is intentionally absent — enabling it causes the IDF boot
-# loader to probe for PSRAM that does not exist and fail.
-# All buffers must fit in the 512 KB internal SRAM alongside WiFi + Arduino.
+# PLATFORM — ESP32-S3FN8, 8 MB flash, ESP-IDF framework
+# Matches the official ESPHome M5Stack Dial reference config exactly.
 # ─────────────────────────────────────────────────────────────────────────────
+platformio_options:
+  board_build.flash_mode: dio
+
 esp32:
-  board: esp32-s3-devkitc-1
   variant: esp32s3
   framework:
-    type: arduino
-  flash_size: 8MB
+    type: esp-idf
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -404,21 +402,18 @@ globals:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# DISPLAY — GC9A01A 240×240 round, MIPI SPI
-# Switched from ili9xxx to mipi_spi — different (native) init sequence.
+# DISPLAY — GC9A01A 240×240 round, SPI
+# Matches official ESPHome M5Stack Dial config from devices.esphome.io
 # ─────────────────────────────────────────────────────────────────────────────
 display:
-  - platform: mipi_spi
+  - platform: ili9xxx
     model: GC9A01A
     id: round_display
     cs_pin:    GPIO7
     dc_pin:    GPIO4
     reset_pin: GPIO8
-    color_order: bgr
-    invert_colors: true
     update_interval: never     # LVGL drives all redraws
     auto_clear_enabled: false
-    dimensions: 240x240
 
 
 # ─────────────────────────────────────────────────────────────────────────────
