@@ -19,10 +19,16 @@ static constexpr uint16_t COL_GREY_33 = 0x31A6;  // #333333
 static constexpr int CENTER_X = 120;
 static constexpr int CENTER_Y = 120;
 
-// ── Shared drawing helper ─────────────────────────────────────────────────────
+// ── Shared drawing helpers ────────────────────────────────────────────────────
 // Draw text centred at (x, y), truncating with "..." if wider than max_width px.
+// Uses COL_BG as text background (for screens with solid dark bg).
 void screen_draw_clipped(int32_t x, int32_t y, const std::string &text,
                          int max_width, uint32_t color, const void *font);
+
+// Return text clipped to max_width pixels (with "..." if truncated).
+// Measures with M5Dial.Display — does NOT draw anything.
+std::string screen_clip_to_width(const std::string &text, int max_width,
+                                 const void *font);
 
 // ── Abstract screen base ──────────────────────────────────────────────────────
 class Screen {

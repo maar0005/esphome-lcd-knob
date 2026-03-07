@@ -43,6 +43,12 @@ substitutions:
   sonos_used:    "true"
   sonos_entity:  "media_player.living_room"   # HA media_player entity ID
   volume_step:   "2"                          # Volume % per encoder click (1–10)
+  # Base URL of your Home Assistant instance.
+  # Needed when album art is served via HA's media proxy (relative URLs).
+  # Spotify / internet radio streams usually provide absolute CDN URLs, so
+  # you can leave this blank in that case.
+  # Example: "http://homeassistant.local:8123"  or  "http://192.168.1.10:8123"
+  ha_url: ""
 
   # ── Meater+ probe screen ──────────────────────────────────────────────────────
   meater_used:               "false"
@@ -136,11 +142,12 @@ lcd_knob:
 
   screens:
     # ── Sonos media player ────────────────────────────────────────────────────
-    # Three pages: Playlist browser → Now Playing → Volume control
+    # Three pages: Playlist browser → Now Playing (album art) → Volume control
     - type: sonos
       used: ${sonos_used}
       entity: "${sonos_entity}"
       volume_step: ${volume_step}
+      ha_url: "${ha_url}"
 
     # ── Meater+ probe thermometer ─────────────────────────────────────────────
     # Shows probe temp, progress arc toward target, and ambient temp.
@@ -629,9 +636,7 @@ text_sensor:
     attribute: entity_picture
     on_value:
       then:
-        - lambda: |-
-            if (x.empty()) return;
-            ESP_LOGI("sonos", "Album art URL (not rendered): %s", x.c_str());
+        - lambda: 'if (!x.empty()) id(knob).set_album_art_url(x);'
 
   - platform: homeassistant
     id: ts_player_state

@@ -1,6 +1,8 @@
 #include "lcd_knob.h"
 #include "esphome/core/log.h"
 #include <M5Dial.h>
+#include <HTTPClient.h>
+#include <WiFiClientSecure.h>
 
 namespace esphome {
 namespace lcd_knob {
@@ -24,23 +26,20 @@ void LcdKnob::setup() {
   last_interaction_ = millis();
 
   // ── Build groups in declaration order ─────────────────────────────────────
-  // Timer / alarm / count-up pages are collected into a single "Alarms" group.
-  // Long press cycles between them (same pattern as Sonos pages).
   std::vector<std::string> group_names;
-  ScreenGroup lights_group;
-  lights_group.name = "Lights";
-  ScreenGroup alarms_group;
-  alarms_group.name = "Alarms";
+  ScreenGroup lights_group;  lights_group.name = "Lights";
+  ScreenGroup alarms_group;  alarms_group.name = "Alarms";
 
   for (auto &sc : screen_configs_) {
     switch (sc.kind) {
       case ScreenKind::SONOS: {
         ScreenGroup g;
-        g.name              = "Sonos";
-        sonos_state_.entity = sc.sonos_entity;
-        sonos_playlist_     = new SonosPlaylistScreen(&sonos_state_);
-        sonos_now_playing_  = new SonosNowPlayingScreen(&sonos_state_);
-        sonos_volume_       = new SonosVolumeScreen(&sonos_state_, sc.sonos_volume_step);
+        g.name                = "Sonos";
+        sonos_state_.entity   = sc.sonos_entity;
+        sonos_state_.ha_url   = sc.sonos_ha_url;
+        sonos_playlist_    = new SonosPlaylistScreen(&sonos_state_);
+        sonos_now_playing_ = new SonosNowPlayingScreen(&sonos_state_);
+        sonos_volume_      = new SonosVolumeScreen(&sonos_state_, sc.sonos_volume_step);
         g.pages = {sonos_playlist_, sonos_now_playing_, sonos_volume_};
         groups_.push_back(std::move(g));
         group_names.push_back("Sonos");
@@ -88,7 +87,7 @@ void LcdKnob::setup() {
         break;
       }
       case ScreenKind::LIGHT: {
-        auto *ls  = new LightState();
+        auto *ls   = new LightState();
         ls->entity = sc.light_entity;
         ls->name   = sc.light_name;
         light_states_.push_back(ls);
@@ -120,20 +119,32 @@ void LcdKnob::loop() {
 
   uint32_t now = millis();
 
+  // ── Album art screensaver: auto-return to Now Playing when idle + playing ──
+  if (sonos_state_.is_playing && sonos_now_playing_ &&
+      current_screen() != sonos_now_playing_ && !in_menu_ &&
+      (now - last_interaction_) > ART_RETURN_MS) {
+    navigate_to_now_playing_();
+  }
+
+  // ── Pending album art fetch (blocks ~0.5–2 s; done only on track change) ──
+  if (art_fetch_pending_) {
+    art_fetch_pending_ = false;
+    do_fetch_album_art_();
+  }
+
   // ── Tick running timers and count-up ──────────────────────────────────────
   if (timer1_screen_)  timer1_screen_->tick(now);
   if (timer2_screen_)  timer2_screen_->tick(now);
   if (countup_screen_) countup_screen_->tick(now);
 
-  // ── Screen dim ────────────────────────────────────────────────────────────
-  if (!screen_dimmed_ && !any_active() &&
+  // ── Screen dim (suppressed while music is playing) ────────────────────────
+  if (!screen_dimmed_ && !any_active() && screen_off_time_ > 0 &&
       (now - last_interaction_) > screen_off_time_) {
     M5Dial.Display.setBrightness(BRIGHTNESS_DIM);
     screen_dimmed_ = true;
   }
 
   // ── Touch double-tap → toggle menu ───────────────────────────────────────
-  // CST816S reports wasPressed() once per touch-down event.
   auto touch = M5Dial.Touch.getDetail();
   if (touch.wasPressed()) {
     if (last_tap_ms_ != 0 && (now - last_tap_ms_) < DOUBLE_TAP_MS) {
@@ -173,21 +184,39 @@ void LcdKnob::next_page_in_group() {
   g.pages[g.current_page]->mark_dirty();
 }
 
+void LcdKnob::navigate_to_now_playing_() {
+  if (!sonos_now_playing_) return;
+  for (size_t gi = 0; gi < groups_.size(); ++gi) {
+    auto &g = groups_[gi];
+    for (size_t pi = 0; pi < g.pages.size(); ++pi) {
+      if (g.pages[pi] == sonos_now_playing_) {
+        current_group_ = gi;
+        g.current_page = pi;
+        in_menu_       = false;
+        sonos_now_playing_->mark_dirty();
+        return;
+      }
+    }
+  }
+}
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // Screen declarations (pre-setup, called from generated code)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void LcdKnob::configure_sonos(const std::string &entity, int volume_step) {
+void LcdKnob::configure_sonos(const std::string &entity, int volume_step,
+                               const std::string &ha_url) {
   ScreenConfig sc;
   sc.kind              = ScreenKind::SONOS;
   sc.sonos_entity      = entity;
   sc.sonos_volume_step = volume_step;
+  sc.sonos_ha_url      = ha_url;
   screen_configs_.push_back(sc);
 }
 
 void LcdKnob::configure_meater(const std::string &t,
-                                    const std::string &tgt,
-                                    const std::string &amb) {
+                                const std::string &tgt,
+                                const std::string &amb) {
   ScreenConfig sc;
   sc.kind                  = ScreenKind::MEATER;
   sc.meater_entity_temp    = t;
@@ -196,37 +225,11 @@ void LcdKnob::configure_meater(const std::string &t,
   screen_configs_.push_back(sc);
 }
 
-void LcdKnob::configure_timer(uint32_t default_s) {
-  ScreenConfig sc;
-  sc.kind            = ScreenKind::TIMER;
-  sc.timer_default_s = default_s;
-  screen_configs_.push_back(sc);
-}
-
-void LcdKnob::configure_timer2(uint32_t default_s) {
-  ScreenConfig sc;
-  sc.kind            = ScreenKind::TIMER2;
-  sc.timer_default_s = default_s;
-  screen_configs_.push_back(sc);
-}
-
-void LcdKnob::configure_alarm() {
-  ScreenConfig sc;
-  sc.kind = ScreenKind::ALARM;
-  screen_configs_.push_back(sc);
-}
-
-void LcdKnob::configure_alarm2() {
-  ScreenConfig sc;
-  sc.kind = ScreenKind::ALARM2;
-  screen_configs_.push_back(sc);
-}
-
-void LcdKnob::configure_countup() {
-  ScreenConfig sc;
-  sc.kind = ScreenKind::COUNTUP;
-  screen_configs_.push_back(sc);
-}
+void LcdKnob::configure_timer (uint32_t d) { ScreenConfig sc; sc.kind = ScreenKind::TIMER;   sc.timer_default_s = d; screen_configs_.push_back(sc); }
+void LcdKnob::configure_timer2(uint32_t d) { ScreenConfig sc; sc.kind = ScreenKind::TIMER2;  sc.timer_default_s = d; screen_configs_.push_back(sc); }
+void LcdKnob::configure_alarm ()           { ScreenConfig sc; sc.kind = ScreenKind::ALARM;   screen_configs_.push_back(sc); }
+void LcdKnob::configure_alarm2()           { ScreenConfig sc; sc.kind = ScreenKind::ALARM2;  screen_configs_.push_back(sc); }
+void LcdKnob::configure_countup()          { ScreenConfig sc; sc.kind = ScreenKind::COUNTUP; screen_configs_.push_back(sc); }
 
 void LcdKnob::configure_light(const std::string &entity, const std::string &name) {
   ScreenConfig sc;
@@ -268,22 +271,12 @@ void LcdKnob::toggle_menu() {
 // Input
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void LcdKnob::on_rotary_cw() {
-  wake_screen();
-  Screen *s = current_screen();
-  if (s) s->on_rotary_cw();
-}
-
-void LcdKnob::on_rotary_ccw() {
-  wake_screen();
-  Screen *s = current_screen();
-  if (s) s->on_rotary_ccw();
-}
+void LcdKnob::on_rotary_cw()  { wake_screen(); Screen *s = current_screen(); if (s) s->on_rotary_cw(); }
+void LcdKnob::on_rotary_ccw() { wake_screen(); Screen *s = current_screen(); if (s) s->on_rotary_ccw(); }
 
 void LcdKnob::on_short_press() {
   wake_screen();
   if (in_menu_) {
-    // Enter the highlighted group and close menu
     if (menu_screen_) current_group_ = menu_screen_->get_selection();
     close_menu();
     return;
@@ -294,14 +287,10 @@ void LcdKnob::on_short_press() {
 
 void LcdKnob::on_long_press() {
   wake_screen();
-  if (in_menu_) {
-    close_menu();  // Cancel: long press in menu exits without changing group
-    return;
-  }
+  if (in_menu_) { close_menu(); return; }
   Screen *s = current_screen();
-  if (s && s->on_long_press()) return;  // Screen consumed the event
+  if (s && s->on_long_press()) return;
   next_page_in_group();
-  // Beep is handled in YAML
 }
 
 void LcdKnob::wake_screen() {
@@ -323,7 +312,7 @@ void LcdKnob::set_playlist_json(const std::string &json) {
   std::string raw = json;
   size_t s = raw.find_first_not_of(" \t\r\n");
   size_t e = raw.find_last_not_of(" \t\r\n");
-  if (s == std::string::npos) raw.clear();
+  if (s == std::string::npos) { raw.clear(); }
   else raw = raw.substr(s, e - s + 1);
 
   if (raw.empty() || raw.front() != '[') {
@@ -331,17 +320,16 @@ void LcdKnob::set_playlist_json(const std::string &json) {
     sonos_playlist_->mark_dirty();
     return;
   }
-
   raw = raw.substr(1, raw.size() > 2 ? raw.size() - 2 : 0);
 
-  bool in_quote = false, escape_next = false;
+  bool in_quote = false, esc = false;
   std::string token;
   for (char c : raw) {
-    if (escape_next) { token += c; escape_next = false; continue; }
-    if (c == '\\')   { escape_next = true; continue; }
+    if (esc)        { token += c; esc = false; continue; }
+    if (c == '\\')  { esc = true; continue; }
     if (c == '"') {
       if (!in_quote) { in_quote = true; token.clear(); }
-      else           { if (!token.empty()) sonos_state_.playlist_names.push_back(token); in_quote = false; }
+      else { if (!token.empty()) sonos_state_.playlist_names.push_back(token); in_quote = false; }
       continue;
     }
     if (in_quote) token += c;
@@ -377,22 +365,98 @@ void LcdKnob::set_player_state(const std::string &state) {
   bool was_playing = sonos_state_.is_playing;
   sonos_state_.is_playing = (state == "playing");
 
-  // Auto-jump to Now Playing when playback starts
-  if (sonos_state_.is_playing && !was_playing && sonos_now_playing_) {
-    for (size_t gi = 0; gi < groups_.size(); gi++) {
-      auto &g = groups_[gi];
-      for (size_t pi = 0; pi < g.pages.size(); pi++) {
-        if (g.pages[pi] == sonos_now_playing_) {
-          current_group_ = gi;
-          g.current_page = pi;
-          in_menu_       = false;
-          break;
-        }
-      }
-    }
+  // Jump to Now Playing the moment playback starts
+  if (sonos_state_.is_playing && !was_playing) {
+    navigate_to_now_playing_();
     wake_screen();
   }
 
+  if (sonos_now_playing_) sonos_now_playing_->mark_dirty();
+}
+
+// ── Album art ─────────────────────────────────────────────────────────────────
+
+void LcdKnob::set_album_art_url(const std::string &url) {
+  if (url == sonos_state_.album_art_url) return;
+  sonos_state_.album_art_url   = url;
+  sonos_state_.album_art_valid = false;
+  sonos_state_.album_art_data.clear();
+  art_url_pending_   = url;
+  art_fetch_pending_ = !url.empty();
+  if (sonos_now_playing_) sonos_now_playing_->mark_dirty();
+}
+
+void LcdKnob::do_fetch_album_art_() {
+  std::string url = art_url_pending_;
+  if (url.empty()) return;
+
+  // Relative URL → prepend HA base URL
+  if (url[0] == '/') {
+    if (sonos_state_.ha_url.empty()) {
+      ESP_LOGW(TAG, "Album art URL is relative but ha_url not configured");
+      return;
+    }
+    url = sonos_state_.ha_url + url;
+  }
+
+  ESP_LOGI(TAG, "Fetching album art: %.80s", url.c_str());
+
+  HTTPClient   http;
+  WiFiClientSecure wcs;
+  const bool   is_https = (url.rfind("https://", 0) == 0);
+
+  if (is_https) {
+    wcs.setInsecure();  // skip cert verification — art CDN, low risk
+    http.begin(wcs, url.c_str());
+  } else {
+    http.begin(url.c_str());
+  }
+
+  http.setTimeout(5000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  const int code = http.GET();
+
+  if (code == HTTP_CODE_OK) {
+    const int len = http.getSize();
+    if (len > 0 && len <= 200000) {
+      // Content-Length known — read in one shot
+      sonos_state_.album_art_data.resize((size_t)len);
+      int n = http.getStream().readBytes(
+          reinterpret_cast<char *>(sonos_state_.album_art_data.data()), len);
+      sonos_state_.album_art_valid = (n == len);
+    } else {
+      // Chunked transfer — accumulate until stream closes
+      WiFiClient *stream = http.getStreamPtr();
+      sonos_state_.album_art_data.clear();
+      sonos_state_.album_art_data.reserve(65536);
+      uint8_t  chunk[512];
+      uint32_t deadline = millis() + 5000;
+      while (millis() < deadline) {
+        int avail = stream->available();
+        if (avail > 0) {
+          int n = stream->read(chunk, avail < (int)sizeof(chunk) ? avail : (int)sizeof(chunk));
+          if (n > 0) {
+            sonos_state_.album_art_data.insert(sonos_state_.album_art_data.end(),
+                                               chunk, chunk + n);
+            deadline = millis() + 1000;  // extend on progress
+          }
+          if (sonos_state_.album_art_data.size() > 200000) break;
+        } else if (!stream->connected()) {
+          break;
+        } else {
+          delay(2);
+        }
+      }
+      sonos_state_.album_art_valid = !sonos_state_.album_art_data.empty();
+    }
+    ESP_LOGI(TAG, "Album art: %d bytes, valid=%d",
+             (int)sonos_state_.album_art_data.size(),
+             (int)sonos_state_.album_art_valid);
+  } else {
+    ESP_LOGW(TAG, "Album art HTTP %d for %.80s", code, url.c_str());
+  }
+
+  http.end();
   if (sonos_now_playing_) sonos_now_playing_->mark_dirty();
 }
 
@@ -400,14 +464,8 @@ void LcdKnob::set_player_state(const std::string &state) {
 // Sonos getters
 // ═══════════════════════════════════════════════════════════════════════════════
 
-float LcdKnob::get_volume() const {
-  return sonos_state_.volume;
-}
-
-int LcdKnob::get_playlist_count() const {
-  return static_cast<int>(sonos_state_.playlist_names.size());
-}
-
+float       LcdKnob::get_volume()                const { return sonos_state_.volume; }
+int         LcdKnob::get_playlist_count()        const { return (int)sonos_state_.playlist_names.size(); }
 std::string LcdKnob::get_current_playlist_name() const {
   if (sonos_state_.playlist_names.empty()) return "";
   return sonos_state_.playlist_names[sonos_state_.playlist_index];
@@ -442,23 +500,12 @@ void LcdKnob::set_timer_duration(uint32_t s) {
     if (timer1_screen_) timer1_screen_->mark_dirty();
   }
 }
-
-void LcdKnob::start_timer() {
-  if (timer1_screen_ && !timer1_state_.running) timer1_screen_->on_short_press();
-}
-
-void LcdKnob::stop_timer() {
-  if (timer1_screen_ && timer1_state_.running) timer1_screen_->on_short_press();
-}
-
+void LcdKnob::start_timer() { if (timer1_screen_ && !timer1_state_.running) timer1_screen_->on_short_press(); }
+void LcdKnob::stop_timer()  { if (timer1_screen_ &&  timer1_state_.running) timer1_screen_->on_short_press(); }
 bool     LcdKnob::is_timer_running()    const { return timer1_state_.running;    }
 uint32_t LcdKnob::get_timer_remaining() const { return timer1_state_.remaining_s; }
 bool     LcdKnob::is_timer_fired()      const { return timer1_state_.fired;       }
-
-void LcdKnob::clear_timer_fired() {
-  timer1_state_.fired = false;
-  if (timer1_screen_) timer1_screen_->mark_dirty();
-}
+void LcdKnob::clear_timer_fired() { timer1_state_.fired = false; if (timer1_screen_) timer1_screen_->mark_dirty(); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Timer 2
@@ -472,95 +519,40 @@ void LcdKnob::set_timer2_duration(uint32_t s) {
     if (timer2_screen_) timer2_screen_->mark_dirty();
   }
 }
-
-void LcdKnob::start_timer2() {
-  if (timer2_screen_ && !timer2_state_.running) timer2_screen_->on_short_press();
-}
-
-void LcdKnob::stop_timer2() {
-  if (timer2_screen_ && timer2_state_.running) timer2_screen_->on_short_press();
-}
-
+void LcdKnob::start_timer2() { if (timer2_screen_ && !timer2_state_.running) timer2_screen_->on_short_press(); }
+void LcdKnob::stop_timer2()  { if (timer2_screen_ &&  timer2_state_.running) timer2_screen_->on_short_press(); }
 bool     LcdKnob::is_timer2_running()    const { return timer2_state_.running;    }
 uint32_t LcdKnob::get_timer2_remaining() const { return timer2_state_.remaining_s; }
 bool     LcdKnob::is_timer2_fired()      const { return timer2_state_.fired;       }
-
-void LcdKnob::clear_timer2_fired() {
-  timer2_state_.fired = false;
-  if (timer2_screen_) timer2_screen_->mark_dirty();
-}
+void LcdKnob::clear_timer2_fired() { timer2_state_.fired = false; if (timer2_screen_) timer2_screen_->mark_dirty(); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Alarm 1
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void LcdKnob::set_alarm_hour(uint8_t h) {
-  alarm1_state_.hour = h % 24;
-  if (alarm1_screen_) alarm1_screen_->mark_dirty();
-}
-
-void LcdKnob::set_alarm_minute(uint8_t m) {
-  alarm1_state_.minute = m % 60;
-  if (alarm1_screen_) alarm1_screen_->mark_dirty();
-}
-
-void LcdKnob::arm_alarm() {
-  alarm1_state_.armed = true;
-  alarm1_state_.fired = false;
-  if (alarm1_screen_) alarm1_screen_->mark_dirty();
-}
-
-void LcdKnob::disarm_alarm() {
-  alarm1_state_.armed = false;
-  alarm1_state_.fired = false;
-  if (alarm1_screen_) alarm1_screen_->mark_dirty();
-}
-
+void LcdKnob::set_alarm_hour  (uint8_t h) { alarm1_state_.hour   = h % 24; if (alarm1_screen_) alarm1_screen_->mark_dirty(); }
+void LcdKnob::set_alarm_minute(uint8_t m) { alarm1_state_.minute = m % 60; if (alarm1_screen_) alarm1_screen_->mark_dirty(); }
+void LcdKnob::arm_alarm()   { alarm1_state_.armed = true;  alarm1_state_.fired = false; if (alarm1_screen_) alarm1_screen_->mark_dirty(); }
+void LcdKnob::disarm_alarm() { alarm1_state_.armed = false; alarm1_state_.fired = false; if (alarm1_screen_) alarm1_screen_->mark_dirty(); }
 bool    LcdKnob::is_alarm_armed()   const { return alarm1_state_.armed;  }
 bool    LcdKnob::is_alarm_fired()   const { return alarm1_state_.fired;  }
 uint8_t LcdKnob::get_alarm_hour()   const { return alarm1_state_.hour;   }
 uint8_t LcdKnob::get_alarm_minute() const { return alarm1_state_.minute; }
-
-void LcdKnob::clear_alarm_fired() {
-  alarm1_state_.fired = false;
-  if (alarm1_screen_) alarm1_screen_->mark_dirty();
-}
+void LcdKnob::clear_alarm_fired() { alarm1_state_.fired = false; if (alarm1_screen_) alarm1_screen_->mark_dirty(); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Alarm 2
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void LcdKnob::set_alarm2_hour(uint8_t h) {
-  alarm2_state_.hour = h % 24;
-  if (alarm2_screen_) alarm2_screen_->mark_dirty();
-}
-
-void LcdKnob::set_alarm2_minute(uint8_t m) {
-  alarm2_state_.minute = m % 60;
-  if (alarm2_screen_) alarm2_screen_->mark_dirty();
-}
-
-void LcdKnob::arm_alarm2() {
-  alarm2_state_.armed = true;
-  alarm2_state_.fired = false;
-  if (alarm2_screen_) alarm2_screen_->mark_dirty();
-}
-
-void LcdKnob::disarm_alarm2() {
-  alarm2_state_.armed = false;
-  alarm2_state_.fired = false;
-  if (alarm2_screen_) alarm2_screen_->mark_dirty();
-}
-
+void LcdKnob::set_alarm2_hour  (uint8_t h) { alarm2_state_.hour   = h % 24; if (alarm2_screen_) alarm2_screen_->mark_dirty(); }
+void LcdKnob::set_alarm2_minute(uint8_t m) { alarm2_state_.minute = m % 60; if (alarm2_screen_) alarm2_screen_->mark_dirty(); }
+void LcdKnob::arm_alarm2()   { alarm2_state_.armed = true;  alarm2_state_.fired = false; if (alarm2_screen_) alarm2_screen_->mark_dirty(); }
+void LcdKnob::disarm_alarm2() { alarm2_state_.armed = false; alarm2_state_.fired = false; if (alarm2_screen_) alarm2_screen_->mark_dirty(); }
 bool    LcdKnob::is_alarm2_armed()   const { return alarm2_state_.armed;  }
 bool    LcdKnob::is_alarm2_fired()   const { return alarm2_state_.fired;  }
 uint8_t LcdKnob::get_alarm2_hour()   const { return alarm2_state_.hour;   }
 uint8_t LcdKnob::get_alarm2_minute() const { return alarm2_state_.minute; }
-
-void LcdKnob::clear_alarm2_fired() {
-  alarm2_state_.fired = false;
-  if (alarm2_screen_) alarm2_screen_->mark_dirty();
-}
+void LcdKnob::clear_alarm2_fired() { alarm2_state_.fired = false; if (alarm2_screen_) alarm2_screen_->mark_dirty(); }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Lights
@@ -576,67 +568,35 @@ void LcdKnob::on_light_on_state(const std::string &entity, bool is_on) {
   }
 }
 
-void LcdKnob::on_light_brightness(const std::string &entity, uint8_t brightness_pct) {
+void LcdKnob::on_light_brightness(const std::string &entity, uint8_t pct) {
   for (size_t i = 0; i < light_states_.size(); i++) {
     if (light_states_[i]->entity == entity) {
-      light_states_[i]->brightness = brightness_pct;
+      light_states_[i]->brightness = pct;
       light_screens_[i]->mark_dirty();
       return;
     }
   }
 }
 
-// Returns the LightScreen currently shown, or nullptr if not on a light screen.
-static LightScreen *active_light_screen(const std::vector<LightScreen*> &screens, Screen *cur) {
+static LightScreen *active_light_screen(const std::vector<LightScreen *> &screens, Screen *cur) {
   for (auto *ls : screens) if (ls == cur) return ls;
   return nullptr;
 }
 
-bool LcdKnob::is_light_screen() const {
-  return !in_menu_ && active_light_screen(light_screens_, current_screen()) != nullptr;
-}
-
-bool LcdKnob::is_light_pending() const {
-  auto *ls = active_light_screen(light_screens_, current_screen());
-  return ls && ls->light_state()->pending;
-}
-
-void LcdKnob::clear_light_pending() {
-  auto *ls = active_light_screen(light_screens_, current_screen());
-  if (ls) const_cast<LightState*>(ls->light_state())->pending = false;
-}
-
-std::string LcdKnob::get_light_entity() const {
-  auto *ls = active_light_screen(light_screens_, current_screen());
-  return ls ? ls->light_state()->entity : "";
-}
-
-bool LcdKnob::get_light_on() const {
-  auto *ls = active_light_screen(light_screens_, current_screen());
-  return ls && ls->light_state()->is_on;
-}
-
-uint8_t LcdKnob::get_light_brightness() const {
-  auto *ls = active_light_screen(light_screens_, current_screen());
-  return ls ? ls->light_state()->brightness : 0;
-}
+bool        LcdKnob::is_light_screen()  const { return !in_menu_ && active_light_screen(light_screens_, current_screen()) != nullptr; }
+bool        LcdKnob::is_light_pending() const { auto *l = active_light_screen(light_screens_, current_screen()); return l && l->light_state()->pending; }
+void        LcdKnob::clear_light_pending()    { auto *l = active_light_screen(light_screens_, current_screen()); if (l) const_cast<LightState*>(l->light_state())->pending = false; }
+std::string LcdKnob::get_light_entity() const { auto *l = active_light_screen(light_screens_, current_screen()); return l ? l->light_state()->entity : ""; }
+bool        LcdKnob::get_light_on()     const { auto *l = active_light_screen(light_screens_, current_screen()); return l && l->light_state()->is_on; }
+uint8_t     LcdKnob::get_light_brightness() const { auto *l = active_light_screen(light_screens_, current_screen()); return l ? l->light_state()->brightness : 0; }
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Count-up
 // ═══════════════════════════════════════════════════════════════════════════════
 
-void LcdKnob::start_countup() {
-  if (countup_screen_ && !countup_state_.running) countup_screen_->on_short_press();
-}
-
-void LcdKnob::reset_countup() {
-  countup_state_.running   = false;
-  countup_state_.start_ms  = 0;
-  countup_state_.elapsed_s = 0;
-  if (countup_screen_) countup_screen_->mark_dirty();
-}
-
-bool     LcdKnob::is_countup_running()  const { return countup_state_.running;   }
+void     LcdKnob::start_countup()      { if (countup_screen_ && !countup_state_.running) countup_screen_->on_short_press(); }
+void     LcdKnob::reset_countup()      { countup_state_ = {}; if (countup_screen_) countup_screen_->mark_dirty(); }
+bool     LcdKnob::is_countup_running() const { return countup_state_.running;   }
 uint32_t LcdKnob::get_countup_elapsed() const { return countup_state_.elapsed_s; }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -653,21 +613,22 @@ void LcdKnob::check_alarms(uint8_t hour, uint8_t minute) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 void LcdKnob::draw_mode_dots() {
-  if (in_menu_) return;  // MenuScreen draws its own dots
+  if (in_menu_) return;
   if (groups_.empty()) return;
-
   const auto &g = groups_[current_group_];
-  if (g.pages.size() <= 1) return;  // Single-page group: no dots
+  if (g.pages.size() <= 1) return;
 
   auto &dsp         = M5Dial.Display;
-  const int n       = static_cast<int>(g.pages.size());
+  const int n       = (int)g.pages.size();
   const int dot_r   = 4;
   const int spacing = 14;
   const int dot_y   = 212;
   const int x_start = CENTER_X - (n - 1) * spacing / 2;
 
   for (int i = 0; i < n; i++) {
-    uint16_t color = (static_cast<size_t>(i) == g.current_page) ? COL_ORANGE : COL_GREY_44;
+    // Dark halo for visibility on top of any background (incl. album art)
+    dsp.fillCircle(x_start + i * spacing, dot_y, dot_r + 1, 0x0000);
+    uint16_t color = ((size_t)i == g.current_page) ? COL_ORANGE : COL_GREY_CC;
     dsp.fillCircle(x_start + i * spacing, dot_y, dot_r, color);
   }
 }

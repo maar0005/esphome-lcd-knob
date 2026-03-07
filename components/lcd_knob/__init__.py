@@ -34,6 +34,7 @@ CONF_TYPE                = "type"
 CONF_USED                = "used"
 CONF_ENTITY              = "entity"
 CONF_VOLUME_STEP         = "volume_step"
+CONF_HA_URL              = "ha_url"
 CONF_ENTITY_TEMPERATURE  = "entity_temperature"
 CONF_ENTITY_TARGET       = "entity_target"
 CONF_ENTITY_AMBIENT      = "entity_ambient"
@@ -51,6 +52,12 @@ SONOS_SCHEMA = cv.Schema(
     {
         cv.Required(CONF_ENTITY): cv.string,
         cv.Optional(CONF_VOLUME_STEP, default=2): cv.int_range(min=1, max=10),
+        # Base URL of your Home Assistant instance, needed when entity_picture
+        # is a relative path (e.g. "/api/media_player_proxy/…").
+        # Example: "http://homeassistant.local:8123"
+        # Leave empty if your Sonos streams from Spotify / internet sources
+        # (those entity_picture URLs are already absolute HTTPS CDN links).
+        cv.Optional(CONF_HA_URL, default=""): cv.string,
     }
 )
 
@@ -145,6 +152,7 @@ async def to_code(config):
                 var.configure_sonos(
                     screen[CONF_ENTITY],
                     screen.get(CONF_VOLUME_STEP, 2),
+                    screen.get(CONF_HA_URL, ""),
                 )
             )
 
