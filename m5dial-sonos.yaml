@@ -4,10 +4,22 @@
 #
 # Hardware: M5Stack Dial (ESP32-S3)
 #   - GC9A01A 240×240 round display (driven by M5Unified/LovyanGFX)
-#   - EC11 rotary encoder
+#   - EC11 rotary encoder + push button
+#   - CST816S capacitive touch (used for double-tap gesture)
 #   - RC522 NFC (I2C) — initialised but not used
 #   - PCF8563 RTC (I2C)
 #   - Passive buzzer (LEDC/RTTTL)
+#
+# ─── Navigation ──────────────────────────────────────────────────────────────
+#  Double-tap screen  → open / close MENU
+#  In MENU:
+#    Encoder          → highlight a group (Sonos / Meater / ...)
+#    Short press      → enter highlighted group
+#    Long press       → cancel (close menu, stay on current group)
+#  In a group:
+#    Long press       → cycle pages within that group (e.g. Playlist→NowPlaying→Volume)
+#    Encoder / press  → group-specific actions (Sonos: volume, track, playlist)
+#    Double-tap       → open MENU
 #
 # ─── Quick-start ─────────────────────────────────────────────────────────────
 #  1. Copy secrets.yaml.example → secrets.yaml and fill in your values.
@@ -233,7 +245,7 @@ binary_sensor:
               }
               // Meater screen: short press is a no-op (read-only display)
 
-      # Long press — advance to next screen (with beep)
+      # Long press — cycle pages within current group (or cancel if in menu)
       - timing:
           - ON for at least ${long_press_duration}
         then:
