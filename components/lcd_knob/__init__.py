@@ -40,6 +40,7 @@ CONF_ENTITY_AMBIENT      = "entity_ambient"
 CONF_SCREEN_OFF_TIME     = "screen_off_time"
 CONF_LONG_PRESS_DURATION = "long_press_duration"
 CONF_DEFAULT_DURATION    = "default_duration"
+CONF_LIGHT_NAME          = "name"
 
 # ── C++ class references ──────────────────────────────────────────────────────
 lcd_knob_ns = cg.esphome_ns.namespace("lcd_knob")
@@ -70,6 +71,15 @@ TIMER_SCHEMA = cv.Schema(
 ALARM_SCHEMA   = cv.Schema({})
 COUNTUP_SCHEMA = cv.Schema({})
 
+LIGHT_SCHEMA = cv.Schema(
+    {
+        cv.Required(CONF_ENTITY): cv.string,
+        # Optional display name.  If omitted the entity ID tail is used,
+        # e.g. "light.kitchen_ceiling" → "KITCHEN CEILING".
+        cv.Optional(CONF_LIGHT_NAME, default=""): cv.string,
+    }
+)
+
 SCREEN_TYPE_SCHEMAS = {
     "sonos":   SONOS_SCHEMA,
     "meater":  MEATER_SCHEMA,
@@ -78,6 +88,7 @@ SCREEN_TYPE_SCHEMAS = {
     "alarm":   ALARM_SCHEMA,
     "alarm2":  ALARM_SCHEMA,
     "countup": COUNTUP_SCHEMA,
+    "light":   LIGHT_SCHEMA,
 }
 
 
@@ -160,6 +171,14 @@ async def to_code(config):
 
         elif t == "countup":
             cg.add(var.configure_countup())
+
+        elif t == "light":
+            entity = screen[CONF_ENTITY]
+            name   = screen.get(CONF_LIGHT_NAME, "")
+            if not name:
+                # Derive a tidy display name from the entity ID tail.
+                name = entity.split(".")[-1].replace("_", " ").upper()
+            cg.add(var.configure_light(entity, name))
 
     # ── Arduino library dependencies ──────────────────────────────────────────
     # NOTE: M5Unified/M5Dial are used for hardware abstraction during the

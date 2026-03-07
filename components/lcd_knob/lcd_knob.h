@@ -8,6 +8,7 @@
 #include "screen_timer.h"
 #include "screen_alarm.h"
 #include "screen_countup.h"
+#include "screen_light.h"
 #include <vector>
 #include <string>
 
@@ -24,7 +25,7 @@ struct ScreenGroup {
 };
 
 // ── Config queue entries (pre-setup) ─────────────────────────────────────────
-enum class ScreenKind : uint8_t { SONOS, MEATER, TIMER, TIMER2, ALARM, ALARM2, COUNTUP };
+enum class ScreenKind : uint8_t { SONOS, MEATER, TIMER, TIMER2, ALARM, ALARM2, COUNTUP, LIGHT };
 
 struct ScreenConfig {
   ScreenKind  kind;
@@ -34,6 +35,8 @@ struct ScreenConfig {
   std::string meater_entity_target;
   std::string meater_entity_ambient;
   uint32_t    timer_default_s{300};  // used by TIMER / TIMER2
+  std::string light_entity;
+  std::string light_name;
 };
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -58,6 +61,7 @@ class LcdKnob : public Component {
   void configure_alarm  ();
   void configure_alarm2 ();
   void configure_countup();
+  void configure_light(const std::string &entity, const std::string &name);
 
   // ── Menu control (also triggered from touch double-tap in loop()) ─────────
   void open_menu();
@@ -128,6 +132,19 @@ class LcdKnob : public Component {
   uint8_t get_alarm2_hour()  const;
   uint8_t get_alarm2_minute() const;
 
+  // ── Light API ──────────────────────────────────────────────────────────────
+  // Called from YAML sensors when HA pushes a state update for a light entity.
+  void on_light_on_state  (const std::string &entity, bool is_on);
+  void on_light_brightness(const std::string &entity, uint8_t brightness_pct);
+
+  // Queries used in YAML lambdas after rotary/press events to push back to HA.
+  bool        is_light_screen()      const;
+  bool        is_light_pending()     const;
+  void        clear_light_pending();
+  std::string get_light_entity()     const;
+  bool        get_light_on()         const;
+  uint8_t     get_light_brightness() const;
+
   // ── Count-up API ───────────────────────────────────────────────────────────
   void     start_countup();
   void     reset_countup();
@@ -174,6 +191,11 @@ class LcdKnob : public Component {
 
   CountUpState   countup_state_;
   CountUpScreen *countup_screen_{nullptr};
+
+  // Light screens — dynamic; one entry per configure_light() call.
+  // States are heap-allocated so pointers stay stable across vector growth.
+  std::vector<LightState*>  light_states_;
+  std::vector<LightScreen*> light_screens_;
 
   bool any_active() const {
     return sonos_state_.is_playing

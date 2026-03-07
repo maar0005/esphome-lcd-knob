@@ -27,6 +27,8 @@ void LcdKnob::setup() {
   // Timer / alarm / count-up pages are collected into a single "Alarms" group.
   // Long press cycles between them (same pattern as Sonos pages).
   std::vector<std::string> group_names;
+  ScreenGroup lights_group;
+  lights_group.name = "Lights";
   ScreenGroup alarms_group;
   alarms_group.name = "Alarms";
 
@@ -85,9 +87,23 @@ void LcdKnob::setup() {
         alarms_group.pages.push_back(countup_screen_);
         break;
       }
+      case ScreenKind::LIGHT: {
+        auto *ls  = new LightState();
+        ls->entity = sc.light_entity;
+        ls->name   = sc.light_name;
+        light_states_.push_back(ls);
+        auto *lsc = new LightScreen(ls);
+        light_screens_.push_back(lsc);
+        lights_group.pages.push_back(lsc);
+        break;
+      }
     }
   }
 
+  if (!lights_group.pages.empty()) {
+    groups_.push_back(std::move(lights_group));
+    group_names.push_back("Lights");
+  }
   if (!alarms_group.pages.empty()) {
     groups_.push_back(std::move(alarms_group));
     group_names.push_back("Alarms");
@@ -209,6 +225,14 @@ void LcdKnob::configure_alarm2() {
 void LcdKnob::configure_countup() {
   ScreenConfig sc;
   sc.kind = ScreenKind::COUNTUP;
+  screen_configs_.push_back(sc);
+}
+
+void LcdKnob::configure_light(const std::string &entity, const std::string &name) {
+  ScreenConfig sc;
+  sc.kind         = ScreenKind::LIGHT;
+  sc.light_entity = entity;
+  sc.light_name   = name;
   screen_configs_.push_back(sc);
 }
 
@@ -536,6 +560,65 @@ uint8_t LcdKnob::get_alarm2_minute() const { return alarm2_state_.minute; }
 void LcdKnob::clear_alarm2_fired() {
   alarm2_state_.fired = false;
   if (alarm2_screen_) alarm2_screen_->mark_dirty();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Lights
+// ═══════════════════════════════════════════════════════════════════════════════
+
+void LcdKnob::on_light_on_state(const std::string &entity, bool is_on) {
+  for (size_t i = 0; i < light_states_.size(); i++) {
+    if (light_states_[i]->entity == entity) {
+      light_states_[i]->is_on = is_on;
+      light_screens_[i]->mark_dirty();
+      return;
+    }
+  }
+}
+
+void LcdKnob::on_light_brightness(const std::string &entity, uint8_t brightness_pct) {
+  for (size_t i = 0; i < light_states_.size(); i++) {
+    if (light_states_[i]->entity == entity) {
+      light_states_[i]->brightness = brightness_pct;
+      light_screens_[i]->mark_dirty();
+      return;
+    }
+  }
+}
+
+// Returns the LightScreen currently shown, or nullptr if not on a light screen.
+static LightScreen *active_light_screen(const std::vector<LightScreen*> &screens, Screen *cur) {
+  for (auto *ls : screens) if (ls == cur) return ls;
+  return nullptr;
+}
+
+bool LcdKnob::is_light_screen() const {
+  return !in_menu_ && active_light_screen(light_screens_, current_screen()) != nullptr;
+}
+
+bool LcdKnob::is_light_pending() const {
+  auto *ls = active_light_screen(light_screens_, current_screen());
+  return ls && ls->light_state()->pending;
+}
+
+void LcdKnob::clear_light_pending() {
+  auto *ls = active_light_screen(light_screens_, current_screen());
+  if (ls) const_cast<LightState*>(ls->light_state())->pending = false;
+}
+
+std::string LcdKnob::get_light_entity() const {
+  auto *ls = active_light_screen(light_screens_, current_screen());
+  return ls ? ls->light_state()->entity : "";
+}
+
+bool LcdKnob::get_light_on() const {
+  auto *ls = active_light_screen(light_screens_, current_screen());
+  return ls && ls->light_state()->is_on;
+}
+
+uint8_t LcdKnob::get_light_brightness() const {
+  auto *ls = active_light_screen(light_screens_, current_screen());
+  return ls ? ls->light_state()->brightness : 0;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
