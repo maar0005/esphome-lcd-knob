@@ -424,24 +424,28 @@ binary_sensor:
 
   # ── Light on/off state — HA → device ─────────────────────────────────────────
   - platform: homeassistant
+    id: light1_on_state_sensor
     entity_id: "${light1_entity}"
     on_state:
       then:
         - lambda: 'id(knob).on_light_on_state("${light1_entity}", x);'
 
   - platform: homeassistant
+    id: light2_on_state_sensor
     entity_id: "${light2_entity}"
     on_state:
       then:
         - lambda: 'id(knob).on_light_on_state("${light2_entity}", x);'
 
   - platform: homeassistant
+    id: light3_on_state_sensor
     entity_id: "${light3_entity}"
     on_state:
       then:
         - lambda: 'id(knob).on_light_on_state("${light3_entity}", x);'
 
   - platform: homeassistant
+    id: light4_on_state_sensor
     entity_id: "${light4_entity}"
     on_state:
       then:
