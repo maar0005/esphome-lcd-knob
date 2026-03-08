@@ -2,6 +2,7 @@
 #include "esphome/core/log.h"
 #include <M5Dial.h>
 #include <HTTPClient.h>
+#include <WiFiClient.h>
 #include <WiFiClientSecure.h>
 
 namespace esphome {
