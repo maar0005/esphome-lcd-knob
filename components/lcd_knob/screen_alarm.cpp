@@ -87,7 +87,7 @@ void AlarmScreen::draw() {
   // ── Label ────────────────────────────────────────────────────────────────
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.drawString(label_, CENTER_X, 28);
 
   // ── Blink logic ──────────────────────────────────────────────────────────
@@ -107,7 +107,7 @@ void AlarmScreen::draw() {
   snprintf(hbuf, sizeof(hbuf), "%02u", state_->hour);
   snprintf(mbuf, sizeof(mbuf), "%02u", state_->minute);
 
-  dsp.setFont(&fonts::FreeSansBold18pt7b);
+  dsp.setFont(FONT_LARGE);
 
   // Hour segment
   uint16_t h_colour = COL_WHITE;
@@ -128,7 +128,7 @@ void AlarmScreen::draw() {
   dsp.drawString(mbuf, CENTER_X + 34, CENTER_Y - 8);
 
   // ── Status line ──────────────────────────────────────────────────────────
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   if (state_->fired) {
     dsp.setTextColor(COL_WHITE, COL_BG);
     dsp.drawString("ALARM!", CENTER_X, 160);

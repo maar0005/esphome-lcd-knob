@@ -12,7 +12,7 @@ void MeaterScreen::draw() {
   if (!has_temp_) {
     dsp.setTextColor(COL_GREY_55, COL_BG);
     dsp.setTextDatum(middle_center);
-    dsp.setFont(&fonts::FreeSansBold12pt7b);
+    dsp.setFont(FONT_MEDIUM);
     dsp.drawString("No probe", CENTER_X, CENTER_Y);
     return;
   }
@@ -20,12 +20,13 @@ void MeaterScreen::draw() {
   // ── Header ────────────────────────────────────────────────────────────────
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.drawString("PROBE", CENTER_X, 28);
 
-  // ── Progress arc (135° → 405°, gap at bottom) ────────────────────────────
+  // ── Progress arc (gap at bottom) ─────────────────────────────────────────
   // Shows how close the probe temp is to the target.
-  dsp.fillArc(CENTER_X, CENTER_Y, 105, 97, 135, 405, COL_GREY_33);
+  dsp.fillArc(CENTER_X, CENTER_Y, ARC_OUTER, ARC_INNER,
+              ARC_START, ARC_END_FULL, COL_GREY_33);
 
   if (has_target_ && target_ > 0.0f) {
     float pct = temp_ / target_;
@@ -36,9 +37,9 @@ void MeaterScreen::draw() {
     uint16_t arc_colour = (pct >= 0.95f) ? COL_WHITE : COL_ORANGE;
 
     if (pct > 0.0f) {
-      float end_angle = 135.0f + 270.0f * pct;
-      dsp.fillArc(CENTER_X, CENTER_Y, 105, 97, 135,
-                  static_cast<int>(end_angle), arc_colour);
+      float end_angle = ARC_START + ARC_SWEEP * pct;
+      dsp.fillArc(CENTER_X, CENTER_Y, ARC_OUTER, ARC_INNER,
+                  ARC_START, static_cast<int>(end_angle), arc_colour);
     }
   }
 
@@ -46,7 +47,7 @@ void MeaterScreen::draw() {
   char buf[16];
   snprintf(buf, sizeof(buf), "%.0f\xb0", temp_);  // e.g. "67°"
   dsp.setTextColor(COL_WHITE, COL_BG);
-  dsp.setFont(&fonts::FreeSansBold18pt7b);
+  dsp.setFont(FONT_LARGE);
   dsp.drawString(buf, CENTER_X, CENTER_Y - 8);
 
   // ── Target temperature ────────────────────────────────────────────────────
@@ -54,7 +55,7 @@ void MeaterScreen::draw() {
     char tbuf[24];
     snprintf(tbuf, sizeof(tbuf), "\x11 %.0f\xb0", target_);  // "→ 71°"
     dsp.setTextColor(COL_GREY_CC, COL_BG);
-    dsp.setFont(&fonts::FreeSansBold9pt7b);
+    dsp.setFont(FONT_SMALL);
     dsp.drawString(tbuf, CENTER_X, CENTER_Y + 28);
   }
 
@@ -63,7 +64,7 @@ void MeaterScreen::draw() {
     char abuf[24];
     snprintf(abuf, sizeof(abuf), "Amb %.0f\xb0", ambient_);
     dsp.setTextColor(COL_GREY_55, COL_BG);
-    dsp.setFont(&fonts::FreeSansBold9pt7b);
+    dsp.setFont(FONT_SMALL);
     dsp.drawString(abuf, CENTER_X, 195);
   }
 }

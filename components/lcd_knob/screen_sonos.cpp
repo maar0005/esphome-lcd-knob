@@ -29,16 +29,16 @@ void SonosPlaylistScreen::draw() {
   dsp.fillScreen(COL_BG);
 
   // Subtle outer ring
-  dsp.drawArc(CENTER_X, CENTER_Y, 119, 117, 0, 360, COL_GREY_33);
+  dsp.drawArc(CENTER_X, CENTER_Y, ARC_DECO_OUTER, ARC_DECO_INNER, 0, 360, COL_GREY_33);
 
   // Header
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.drawString("FAVOURITES", CENTER_X, 24);
 
   if (state_->playlist_names.empty()) {
-    dsp.setFont(&fonts::FreeSansBold12pt7b);
+    dsp.setFont(FONT_MEDIUM);
     dsp.setTextColor(COL_WHITE, COL_BG);
     dsp.drawString("No favourites", CENTER_X, CENTER_Y);
     return;
@@ -52,10 +52,10 @@ void SonosPlaylistScreen::draw() {
   // Dim items above and below
   screen_draw_clipped(CENTER_X, CENTER_Y - 44,
                       state_->playlist_names[prev], 160,
-                      COL_GREY_55, &fonts::FreeSansBold9pt7b);
+                      COL_GREY_55, FONT_SMALL);
   screen_draw_clipped(CENTER_X, CENTER_Y + 44,
                       state_->playlist_names[next], 160,
-                      COL_GREY_55, &fonts::FreeSansBold9pt7b);
+                      COL_GREY_55, FONT_SMALL);
 
   // Orange left accent bar for selected item
   dsp.fillRoundRect(14, CENTER_Y - 17, 4, 34, 2, COL_ORANGE);
@@ -63,12 +63,12 @@ void SonosPlaylistScreen::draw() {
   // Selected item (slightly right of centre to clear the accent bar)
   screen_draw_clipped(CENTER_X + 3, CENTER_Y,
                       state_->playlist_names[cur], 190,
-                      COL_WHITE, &fonts::FreeSansBold12pt7b);
+                      COL_WHITE, FONT_MEDIUM);
 
   // Position counter  "3 / 12"
   char buf[14];
   snprintf(buf, sizeof(buf), "%d / %d", cur + 1, n);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.setTextColor(COL_GREY_44, COL_BG);
   dsp.drawString(buf, CENTER_X, 183);
 }
@@ -88,11 +88,11 @@ void SonosNowPlayingScreen::draw_art_mode_() {
                0, 0, 240, 240);
 
   // 2. Solid dark bar at bottom for text contrast — covers rows 168–239
-  dsp.fillRect(0, 168, 240, 72, 0x0000);
+  dsp.fillRect(0, 168, 240, 72, COL_BLACK);
   dsp.drawFastHLine(0, 168, 240, COL_GREY_33);  // subtle top edge
 
   // 3. Play / pause icon — dark halo first so it reads over any art colour
-  dsp.fillCircle(CENTER_X, 30, 17, 0x0000);
+  dsp.fillCircle(CENTER_X, 30, 17, COL_BLACK);
   if (state_->is_playing) {
     dsp.fillRect(CENTER_X - 10, 20, 7, 20, COL_ORANGE);
     dsp.fillRect(CENTER_X +  3, 20, 7, 20, COL_ORANGE);
@@ -103,17 +103,15 @@ void SonosNowPlayingScreen::draw_art_mode_() {
 
   // 4. Track title in the dark bar
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold12pt7b);
-  dsp.setTextColor(COL_WHITE, 0x0000);
-  auto title = screen_clip_to_width(state_->media_title, 200,
-                                     &fonts::FreeSansBold12pt7b);
+  dsp.setFont(FONT_MEDIUM);
+  dsp.setTextColor(COL_WHITE, COL_BLACK);
+  auto title = screen_clip_to_width(state_->media_title, 200, FONT_MEDIUM);
   dsp.drawString(title.c_str(), CENTER_X, 190);
 
   // 5. Artist below title
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
-  dsp.setTextColor(COL_ORANGE, 0x0000);
-  auto artist = screen_clip_to_width(state_->media_artist, 192,
-                                      &fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
+  dsp.setTextColor(COL_ORANGE, COL_BLACK);
+  auto artist = screen_clip_to_width(state_->media_artist, 192, FONT_SMALL);
   dsp.drawString(artist.c_str(), CENTER_X, 214);
 }
 
@@ -146,9 +144,9 @@ void SonosNowPlayingScreen::draw_fallback_mode_() {
 
   // Track info
   screen_draw_clipped(CENTER_X, 148, state_->media_title, 200,
-                      COL_WHITE,   &fonts::FreeSansBold12pt7b);
+                      COL_WHITE,   FONT_MEDIUM);
   screen_draw_clipped(CENTER_X, 174, state_->media_artist, 192,
-                      COL_GREY_CC, &fonts::FreeSansBold9pt7b);
+                      COL_GREY_CC, FONT_SMALL);
 }
 
 // ── Public draw ───────────────────────────────────────────────────────────────
@@ -184,30 +182,32 @@ void SonosVolumeScreen::draw() {
 
   // Header
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.drawString("VOLUME", CENTER_X, 28);
 
-  // Background arc  135° → 405°  (270° sweep, gap at bottom)
-  dsp.fillArc(CENTER_X, CENTER_Y, 108, 96, 135, 405, COL_GREY_33);
+  // Background arc  ARC_START → ARC_END_FULL  (270° sweep, gap at bottom)
+  dsp.fillArc(CENTER_X, CENTER_Y, ARC_VOL_OUTER, ARC_VOL_INNER,
+              ARC_START, ARC_END_FULL, COL_GREY_33);
 
   if (pct > 0) {
     // Foreground arc
-    float end_angle = 135.0f + 270.0f * pct / 100.0f;
-    dsp.fillArc(CENTER_X, CENTER_Y, 108, 96, 135, (int)end_angle, COL_ORANGE);
+    float end_angle = ARC_START + ARC_SWEEP * pct / 100.0f;
+    dsp.fillArc(CENTER_X, CENTER_Y, ARC_VOL_OUTER, ARC_VOL_INNER,
+                ARC_START, (int)end_angle, COL_ORANGE);
 
-    // White cap dot at arc tip
+    // Cap dot at arc tip
     float rad = end_angle * (float)M_PI / 180.0f;
-    int   dx  = CENTER_X + (int)(102.0f * cosf(rad));
-    int   dy  = CENTER_Y + (int)(102.0f * sinf(rad));
-    dsp.fillCircle(dx, dy, 7, COL_BG);    // dark ring
-    dsp.fillCircle(dx, dy, 5, COL_WHITE); // white cap
+    int   dx  = CENTER_X + (int)(ARC_CAP_DIST * cosf(rad));
+    int   dy  = CENTER_Y + (int)(ARC_CAP_DIST * sinf(rad));
+    dsp.fillCircle(dx, dy, ARC_CAP_HALO, COL_BG);    // dark halo
+    dsp.fillCircle(dx, dy, ARC_CAP_DOT,  COL_WHITE); // bright tip
   }
 
   // Volume percentage — large centred text
   char buf[8];
   snprintf(buf, sizeof(buf), "%d%%", pct);
-  dsp.setFont(&fonts::FreeSansBold18pt7b);
+  dsp.setFont(FONT_LARGE);
   dsp.setTextColor(COL_WHITE, COL_BG);
   dsp.drawString(buf, CENTER_X, CENTER_Y);
 }

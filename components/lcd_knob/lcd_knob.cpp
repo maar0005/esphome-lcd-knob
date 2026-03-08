@@ -627,7 +627,7 @@ void LcdKnob::draw_mode_dots() {
 
   for (int i = 0; i < n; i++) {
     // Dark halo for visibility on top of any background (incl. album art)
-    dsp.fillCircle(x_start + i * spacing, dot_y, dot_r + 1, 0x0000);
+    dsp.fillCircle(x_start + i * spacing, dot_y, dot_r + 1, COL_BLACK);
     uint16_t color = ((size_t)i == g.current_page) ? COL_ORANGE : COL_GREY_CC;
     dsp.fillCircle(x_start + i * spacing, dot_y, dot_r, color);
   }

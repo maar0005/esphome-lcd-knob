@@ -39,20 +39,22 @@ void LightScreen::draw() {
   dsp.fillScreen(COL_BG);
 
   // ── Label ────────────────────────────────────────────────────────────────
-  screen_draw_clipped(CENTER_X, 28, state_->name, 180, COL_ORANGE, &fonts::FreeSansBold9pt7b);
+  screen_draw_clipped(CENTER_X, 28, state_->name, 180, COL_ORANGE, FONT_SMALL);
 
   // ── Arc ring ─────────────────────────────────────────────────────────────
-  // Background: full 270° sweep (gap at bottom), 135° → 405°
-  dsp.fillArc(CENTER_X, CENTER_Y, 105, 97, 135, 405, COL_GREY_33);
+  // Background: full 270° sweep (gap at bottom)
+  dsp.fillArc(CENTER_X, CENTER_Y, ARC_OUTER, ARC_INNER,
+              ARC_START, ARC_END_FULL, COL_GREY_33);
 
   if (state_->is_on && state_->brightness > 0) {
-    float end_angle = 135.0f + 270.0f * state_->brightness / 100.0f;
-    dsp.fillArc(CENTER_X, CENTER_Y, 105, 97, 135, (int)end_angle, COL_ORANGE);
+    float end_angle = ARC_START + ARC_SWEEP * state_->brightness / 100.0f;
+    dsp.fillArc(CENTER_X, CENTER_Y, ARC_OUTER, ARC_INNER,
+                ARC_START, (int)end_angle, COL_ORANGE);
   }
 
   // ── Centre text ───────────────────────────────────────────────────────────
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold18pt7b);
+  dsp.setFont(FONT_LARGE);
 
   if (state_->is_on) {
     char buf[8];
@@ -60,7 +62,7 @@ void LightScreen::draw() {
     dsp.setTextColor(COL_WHITE, COL_BG);
     dsp.drawString(buf, CENTER_X, CENTER_Y - 8);
 
-    dsp.setFont(&fonts::FreeSansBold9pt7b);
+    dsp.setFont(FONT_SMALL);
     dsp.setTextColor(COL_ORANGE, COL_BG);
     dsp.drawString("ON", CENTER_X, 162);
   } else {

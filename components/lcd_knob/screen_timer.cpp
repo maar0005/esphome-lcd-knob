@@ -106,11 +106,12 @@ void TimerScreen::draw() {
   // ── Label ────────────────────────────────────────────────────────────────
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.drawString(label_, CENTER_X, 28);
 
   // ── Background arc (full ring) ───────────────────────────────────────────
-  dsp.fillArc(CENTER_X, CENTER_Y, 105, 97, 135, 405, COL_GREY_33);
+  dsp.fillArc(CENTER_X, CENTER_Y, ARC_OUTER, ARC_INNER,
+              ARC_START, ARC_END_FULL, COL_GREY_33);
 
   // ── Foreground arc (proportional to remaining / duration) ───────────────
   uint16_t arc_colour = state_->fired ? COL_WHITE : COL_ORANGE;
@@ -122,9 +123,9 @@ void TimerScreen::draw() {
   }
 
   if (pct > 0.0f) {
-    float end_angle = 135.0f + 270.0f * pct;
-    dsp.fillArc(CENTER_X, CENTER_Y, 105, 97, 135,
-                (int)end_angle, arc_colour);
+    float end_angle = ARC_START + ARC_SWEEP * pct;
+    dsp.fillArc(CENTER_X, CENTER_Y, ARC_OUTER, ARC_INNER,
+                ARC_START, (int)end_angle, arc_colour);
   }
 
   // ── Time display (MM:SS) ─────────────────────────────────────────────────
@@ -136,11 +137,11 @@ void TimerScreen::draw() {
   snprintf(buf, sizeof(buf), "%02u:%02u", mm, ss);
 
   dsp.setTextColor(COL_WHITE, COL_BG);
-  dsp.setFont(&fonts::FreeSansBold18pt7b);
+  dsp.setFont(FONT_LARGE);
   dsp.drawString(buf, CENTER_X, CENTER_Y - 8);
 
   // ── Status line ──────────────────────────────────────────────────────────
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   if (state_->fired) {
     dsp.setTextColor(COL_WHITE, COL_BG);
     dsp.drawString("DONE", CENTER_X, 160);

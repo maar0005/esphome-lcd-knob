@@ -37,7 +37,7 @@ void CountUpScreen::draw() {
   // ── Label ────────────────────────────────────────────────────────────────
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.drawString("COUNT UP", CENTER_X, 28);
 
   // ── Elapsed time ─────────────────────────────────────────────────────────
@@ -50,19 +50,19 @@ void CountUpScreen::draw() {
     uint32_t mm = elapsed / 60;
     uint32_t ss = elapsed % 60;
     snprintf(buf, sizeof(buf), "%02u:%02u", mm, ss);
-    dsp.setFont(&fonts::FreeSansBold18pt7b);
+    dsp.setFont(FONT_LARGE);
     dsp.drawString(buf, CENTER_X, CENTER_Y - 8);
   } else {
     uint32_t hh = elapsed / 3600;
     uint32_t mm = (elapsed % 3600) / 60;
     uint32_t ss = elapsed % 60;
     snprintf(buf, sizeof(buf), "%02u:%02u:%02u", hh, mm, ss);
-    dsp.setFont(&fonts::FreeSansBold12pt7b);
+    dsp.setFont(FONT_MEDIUM);
     dsp.drawString(buf, CENTER_X, CENTER_Y - 8);
   }
 
   // ── Status line ──────────────────────────────────────────────────────────
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   if (state_->running) {
     dsp.setTextColor(COL_ORANGE, COL_BG);
     dsp.drawString("RUNNING", CENTER_X, 160);

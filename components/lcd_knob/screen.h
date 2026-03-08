@@ -2,22 +2,10 @@
 
 #include <string>
 #include <cstdint>
+#include "theme.h"
 
 namespace esphome {
 namespace lcd_knob {
-
-// ── Shared RGB565 colour palette ──────────────────────────────────────────────
-static constexpr uint16_t COL_BG      = 0x18E3;  // #1A1A1A dark background
-static constexpr uint16_t COL_ORANGE  = 0xFCA0;  // #FF9500 accent
-static constexpr uint16_t COL_WHITE   = 0xFFFF;
-static constexpr uint16_t COL_GREY_CC = 0xCE79;  // #CCCCCC
-static constexpr uint16_t COL_GREY_55 = 0x52AA;  // #555555
-static constexpr uint16_t COL_GREY_44 = 0x4228;  // #444444
-static constexpr uint16_t COL_GREY_33 = 0x31A6;  // #333333
-
-// ── Display geometry ──────────────────────────────────────────────────────────
-static constexpr int CENTER_X = 120;
-static constexpr int CENTER_Y = 120;
 
 // ── Shared drawing helpers ────────────────────────────────────────────────────
 // Draw text centred at (x, y), truncating with "..." if wider than max_width px.

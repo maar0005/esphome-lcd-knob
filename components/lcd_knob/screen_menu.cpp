@@ -37,13 +37,13 @@ void MenuScreen::draw() {
   // ── Header ────────────────────────────────────────────────────────────────
   dsp.setTextColor(COL_ORANGE, COL_BG);
   dsp.setTextDatum(middle_center);
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.drawString("MENU", CENTER_X, 28);
   dsp.drawFastHLine(CENTER_X - 28, 42, 56, COL_GREY_44);
 
   if (count_ == 0) {
     dsp.setTextColor(COL_GREY_55, COL_BG);
-    dsp.setFont(&fonts::FreeSansBold9pt7b);
+    dsp.setFont(FONT_SMALL);
     dsp.drawString("No screens", CENTER_X, CENTER_Y);
     return;
   }
@@ -55,18 +55,18 @@ void MenuScreen::draw() {
 
   screen_draw_clipped(CENTER_X, CENTER_Y - 44,
                       names_[prev], 160,
-                      COL_GREY_55, &fonts::FreeSansBold9pt7b);
+                      COL_GREY_55, FONT_SMALL);
 
   screen_draw_clipped(CENTER_X, CENTER_Y,
                       names_[selection_], 200,
-                      COL_WHITE, &fonts::FreeSansBold12pt7b);
+                      COL_WHITE, FONT_MEDIUM);
 
   screen_draw_clipped(CENTER_X, CENTER_Y + 44,
                       names_[next], 160,
-                      COL_GREY_55, &fonts::FreeSansBold9pt7b);
+                      COL_GREY_55, FONT_SMALL);
 
   // ── Hint: short press to select ───────────────────────────────────────────
-  dsp.setFont(&fonts::FreeSansBold9pt7b);
+  dsp.setFont(FONT_SMALL);
   dsp.setTextColor(COL_GREY_44, COL_BG);
   dsp.drawString("press to select", CENTER_X, 185);
 
